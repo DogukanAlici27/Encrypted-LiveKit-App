@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_deep">
+
+    <!-- Gradient Overlay for a more premium look -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_call_gradient" />
+
+    <TextView
+        android:id="@+id/callTypeLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="60dp"
+        android:text="GELEN ARAMA"
+        android:textColor="@color/accent_blue"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.2"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/avatarCard"
+        android:layout_width="140dp"
+        android:layout_height="140dp"
+        android:layout_marginTop="30dp"
+        app:cardCornerRadius="70dp"
+        app:cardBackgroundColor="@color/bg_card"
+        app:cardElevation="16dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/callTypeLabel">
+
+        <ImageView
+            android:id="@+id/callerAvatar"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:src="@drawable/ic_person"
+            android:padding="35dp"
+            app:tint="@color/accent_blue" />
+    </androidx.cardview.widget.CardView>
+
+    <TextView
+        android:id="@+id/callerNameText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:text="Kullanıcı Adı"
+        android:textColor="@color/white"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.05"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/avatarCard" />
+
+    <TextView
+        android:id="@+id/callStatusText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="Gelen Görüntülü Arama..."
+        android:textColor="@color/accent_blue"
+        android:textSize="18sp"
+        android:alpha="0.8"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/callerNameText" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginBottom="100dp"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/declineButton"
+            style="@style/Widget.MaterialComponents.Button.Icon"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:layout_marginEnd="50dp"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
+            app:backgroundTint="@color/danger_red"
+            app:cornerRadius="40dp"
+            app:icon="@drawable/ic_hangup"
+            app:iconSize="36dp"
+            app:iconTint="@color/white"
+            app:elevation="8dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/acceptButton"
+            style="@style/Widget.MaterialComponents.Button.Icon"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
+            app:backgroundTint="@color/success_green"
+            app:cornerRadius="40dp"
+            app:icon="@android:drawable/ic_menu_call"
+            app:iconSize="36dp"
+            app:iconTint="@color/white"
+            app:elevation="8dp" />
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

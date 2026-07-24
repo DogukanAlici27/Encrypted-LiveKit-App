@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- LiveKit Açık (Light) Tema Paleti - varsayılan (day) palet -->
+    <color name="bg_deep">#F2F3F7</color>          <!-- Ana arka plan -->
+    <color name="bg_card">#FFFFFF</color>          <!-- Kartlar ve paneller -->
+    <color name="bg_input">#E7E9EF</color>         <!-- Giriş alanları -->
+
+    <color name="accent_blue">#0099CC</color>       <!-- LiveKit Mavi (açık zeminde okunaklı ton) -->
+    <color name="accent_blue_alpha">#330099CC</color> <!-- Şeffaf mavi vurgu -->
+
+    <color name="text_white">#1A1A2E</color>       <!-- Ana metin rengi (isim "text_white" kaldı, gece/gündüz temasında rol değiştiriyor) -->
+    <color name="text_gray">#6E7180</color>        <!-- İkincil metin rengi -->
+
+    <color name="danger_red">#FF3B30</color>       <!-- Kapat butonu -->
+    <color name="success_green">#34C759</color>    <!-- Online/Bağlandı -->
+
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
+</resources>

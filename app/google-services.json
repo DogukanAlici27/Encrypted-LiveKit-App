@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1012064123213",
+    "project_id": "livekit-arama",
+    "storage_bucket": "livekit-arama.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1012064123213:android:b678f7165a6921eaf2df04",
+        "android_client_info": {
+          "package_name": "com.dogu.livekit"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBUK98ELH6Rj1lcXYcPljejGGK7nGBznio"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

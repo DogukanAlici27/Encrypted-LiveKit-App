@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- LiveKit Koyu (Dark) Tema Paleti - önceki tek palet buraya taşındı -->
+    <color name="bg_deep">#121212</color>          <!-- Ana arka plan -->
+    <color name="bg_card">#1E1E1E</color>          <!-- Kartlar ve paneller -->
+    <color name="bg_input">#2A2A2A</color>         <!-- Giriş alanları -->
+
+    <color name="accent_blue">#00D2FF</color>       <!-- LiveKit Mavi -->
+    <color name="accent_blue_alpha">#3300D2FF</color> <!-- Şeffaf mavi vurgu -->
+
+    <color name="text_white">#FFFFFFFF</color>       <!-- Kesin beyaz (okunabilirlik için) -->
+    <color name="text_gray">#A0A0A0</color>        <!-- Net gri -->
+
+    <color name="danger_red">#FF3B30</color>       <!-- Kapat butonu -->
+    <color name="success_green">#34C759</color>    <!-- Online/Bağlandı -->
+</resources>

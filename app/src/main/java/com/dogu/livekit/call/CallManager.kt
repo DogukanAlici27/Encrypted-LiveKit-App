@@ -1,0 +1,109 @@
+package com.dogu.livekit.call
+
+import android.content.Context
+import android.content.Intent
+import androidx.core.content.ContextCompat
+import com.dogu.livekit.logging.Logger
+import io.livekit.android.LiveKit
+import io.livekit.android.RoomOptions
+import io.livekit.android.renderer.SurfaceViewRenderer
+import io.livekit.android.room.Room
+import io.livekit.android.room.track.LocalVideoTrack
+import io.livekit.android.room.track.Track
+import io.livekit.android.room.track.VideoTrack
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+
+object CallManager {
+    var room: Room? = null
+    private var areRenderersInitialized = false
+
+    suspend fun connect(
+        context: Context,
+        url: String,
+        token: String,
+        useVideo: Boolean,
+        localRenderer: SurfaceViewRenderer,
+        remoteRenderer: SurfaceViewRenderer? = null,
+        roomOptions: RoomOptions? = null
+    ): Room {
+        Logger.d("Connecting to room: $url")
+        
+        // Foreground Service başlat
+        val serviceIntent = Intent(context, CallService::class.java)
+        ContextCompat.startForegroundService(context, serviceIntent)
+        
+        // Önceki odadan temiz ayrıl
+        room?.disconnect()
+        
+        val newRoom = LiveKit.create(context, roomOptions ?: RoomOptions())
+        room = newRoom // Bağlanmadan önce atayalım ki isBusy() doğru çalışsın
+
+        // ÖNEMLİ: Renderer ilklendirmesini ana thread'de yapmalıyız
+        withContext(Dispatchers.Main) {
+            try {
+                newRoom.initVideoRenderer(localRenderer)
+                remoteRenderer?.let { newRoom.initVideoRenderer(it) }
+            } catch (e: Exception) {
+                Logger.e("Renderer init hatası: ${e.message}")
+            }
+        }
+
+        newRoom.connect(url, token)
+        newRoom.localParticipant.setMicrophoneEnabled(true)
+
+        if (useVideo) {
+            newRoom.localParticipant.setCameraEnabled(true)
+            
+            // Yerel track'i yakalamak için daha güvenli bir yöntem: Events üzerinden dinleyelim
+            // Ama hızlıca getTrackPublication ile de kontrol edelim
+            
+            withContext(Dispatchers.Main) {
+                var retryCount = 0
+                var localTrack: LocalVideoTrack? = null
+                while (retryCount < 20 && localTrack == null) {
+                    localTrack = newRoom.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack
+                    if (localTrack == null) {
+                        delay(200)
+                        retryCount++
+                    }
+                }
+                
+                if (localTrack != null) {
+                    localRenderer.setScalingType(livekit.org.webrtc.RendererCommon.ScalingType.SCALE_ASPECT_FILL)
+                    localRenderer.setMirror(true) // Yerel kamera görüntüsü aynalanır
+                    localTrack.addRenderer(localRenderer)
+                    localRenderer.visibility = android.view.View.VISIBLE
+                    Logger.d("Yerel kamera track'i renderer'a başarıyla eklendi.")
+                } else {
+                    Logger.e("Yerel kamera track'i oluşturulamadı! Manuel deneme...")
+                }
+            }
+        }
+
+        return newRoom
+    }
+
+    fun disconnect(context: Context? = null) {
+        room?.disconnect()
+        room = null
+        
+        context?.let {
+            val serviceIntent = Intent(it, CallService::class.java)
+            it.stopService(serviceIntent)
+        }
+    }
+
+    suspend fun publishData(data: String) {
+        room?.localParticipant?.publishData(data.toByteArray())
+    }
+
+    fun isConnected(): Boolean {
+        return room?.state == Room.State.CONNECTED
+    }
+
+    fun isBusy(): Boolean {
+        return room != null && room?.state != Room.State.DISCONNECTED
+    }
+}
