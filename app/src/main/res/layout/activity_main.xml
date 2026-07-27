@@ -102,6 +102,22 @@
                 android:layout_marginEnd="12dp" />
 
             <com.google.android.material.button.MaterialButton
+                android:id="@+id/addParticipantButton"
+                style="@style/Widget.MaterialComponents.Button.Icon"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:insetLeft="0dp"
+                android:insetTop="0dp"
+                android:insetRight="0dp"
+                android:insetBottom="0dp"
+                app:backgroundTint="@color/accent_blue_alpha"
+                app:icon="@drawable/ic_people"
+                app:iconSize="24dp"
+                app:iconTint="@color/white"
+                app:cornerRadius="28dp"
+                android:layout_marginEnd="12dp" />
+
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/refreshCallButton"
                 style="@style/Widget.MaterialComponents.Button.Icon"
                 android:layout_width="56dp"
@@ -117,21 +133,21 @@
                 app:cornerRadius="28dp" />
         </LinearLayout>
 
-    <LinearLayout
-        android:id="@+id/ui_container"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical">
-
-        <!-- Header -->
-        <RelativeLayout
-            android:id="@+id/header_layout"
+        <LinearLayout
+            android:id="@+id/ui_container"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingHorizontal="24dp"
-            android:paddingBottom="16dp"
-            android:background="@color/bg_card"
-            android:elevation="4dp">
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <!-- Header -->
+            <RelativeLayout
+                android:id="@+id/header_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="24dp"
+                android:paddingBottom="16dp"
+                android:background="@color/bg_card"
+                android:elevation="4dp">
 
                 <LinearLayout
                     android:layout_width="wrap_content"

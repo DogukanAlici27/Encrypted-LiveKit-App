@@ -8,19 +8,23 @@ import java.io.IOException
 
 object UserRepository {
 
-    suspend fun auth(mode: String, identity: String, password: String, fcmToken: String): Result<JSONObject> = withContext(Dispatchers.IO) {
+    // YENİ: publicKey parametresi eklendi. Register/login sırasında bu cihazın
+    // RSA genel anahtarı sunucuya gönderiliyor ki başkaları bize şifreli oda
+    // anahtarı (E2EE) yollayabilsin.
+    suspend fun auth(mode: String, identity: String, password: String, fcmToken: String, publicKey: String? = null): Result<JSONObject> = withContext(Dispatchers.IO) {
         try {
             val json = JSONObject().apply {
                 put("identity", identity)
                 put("password", password)
                 put("fcmToken", fcmToken)
+                if (publicKey != null) put("publicKey", publicKey)
             }
             val endpoint = if (mode == "register") "/register" else "/login"
             val request = NetworkClient.createPostRequest(endpoint, json)
-            
+
             NetworkClient.httpClient.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
-                    Result.success(JSONObject()) 
+                    Result.success(JSONObject())
                 } else {
                     val errorMsg = response.body?.string() ?: "Error code: ${response.code}"
                     Result.failure(IOException(errorMsg))
@@ -67,12 +71,20 @@ object UserRepository {
         }
     }
 
-    suspend fun fetchToken(identity: String, target: String?, manualRoom: String?): Result<JSONObject> = withContext(Dispatchers.IO) {
+    // YENİ: encryptedKeysJson parametresi eklendi. Bu, {"hedefKimlik": "sifreliAnahtar"}
+    // formatında bir JSON string — arama başlatan/davet eden kişi tarafından
+    // KeyManager.encryptForPublicKey ile önceden hazırlanıyor. Sunucu bunu çözmüyor,
+    // sadece ilgili kişiye push bildirimi içinde olduğu gibi iletiyor.
+    suspend fun fetchToken(identity: String, target: String?, manualRoom: String?, encryptedKeysJson: String? = null): Result<JSONObject> = withContext(Dispatchers.IO) {
         try {
             var url = "${NetworkClient.TOKEN_SERVER_URL}/token?identity=$identity"
             if (target != null) url += "&target=$target"
             if (manualRoom != null) url += "&room=$manualRoom"
-            
+            if (encryptedKeysJson != null) {
+                val encoded = java.net.URLEncoder.encode(encryptedKeysJson, "UTF-8")
+                url += "&keys=$encoded"
+            }
+
             val request = NetworkClient.createGetRequest(url)
             NetworkClient.httpClient.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
@@ -97,7 +109,7 @@ object UserRepository {
                 null
             }
 
-            val json = JSONObject().apply { 
+            val json = JSONObject().apply {
                 put("identity", identity)
                 if (roomName != null) {
                     put("room", roomName)

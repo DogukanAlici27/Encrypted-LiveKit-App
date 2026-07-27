@@ -17,6 +17,9 @@ import kotlinx.coroutines.withContext
 
 object CallManager {
     var room: Room? = null
+    // YENİ: aktif görüşmenin AES oda anahtarı (E2EE). "Kullanıcı Ekle" ile birini
+    // davet ederken aynı anahtarı yeniden şifreleyip yollamak için burada tutuyoruz.
+    var currentRoomKey: String? = null
     private var areRenderersInitialized = false
 
     suspend fun connect(
@@ -29,14 +32,14 @@ object CallManager {
         roomOptions: RoomOptions? = null
     ): Room {
         Logger.d("Connecting to room: $url")
-        
+
         // Foreground Service başlat
         val serviceIntent = Intent(context, CallService::class.java)
         ContextCompat.startForegroundService(context, serviceIntent)
-        
+
         // Önceki odadan temiz ayrıl
         room?.disconnect()
-        
+
         val newRoom = LiveKit.create(context, roomOptions ?: RoomOptions())
         room = newRoom // Bağlanmadan önce atayalım ki isBusy() doğru çalışsın
 
@@ -55,10 +58,10 @@ object CallManager {
 
         if (useVideo) {
             newRoom.localParticipant.setCameraEnabled(true)
-            
+
             // Yerel track'i yakalamak için daha güvenli bir yöntem: Events üzerinden dinleyelim
             // Ama hızlıca getTrackPublication ile de kontrol edelim
-            
+
             withContext(Dispatchers.Main) {
                 var retryCount = 0
                 var localTrack: LocalVideoTrack? = null
@@ -69,7 +72,7 @@ object CallManager {
                         retryCount++
                     }
                 }
-                
+
                 if (localTrack != null) {
                     localRenderer.setScalingType(livekit.org.webrtc.RendererCommon.ScalingType.SCALE_ASPECT_FILL)
                     localRenderer.setMirror(true) // Yerel kamera görüntüsü aynalanır
@@ -88,7 +91,8 @@ object CallManager {
     fun disconnect(context: Context? = null) {
         room?.disconnect()
         room = null
-        
+        currentRoomKey = null // YENİ: görüşme bitince anahtarı da bellekten temizle
+
         context?.let {
             val serviceIntent = Intent(it, CallService::class.java)
             it.stopService(serviceIntent)

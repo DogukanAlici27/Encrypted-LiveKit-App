@@ -1,5 +1,6 @@
 package com.dogu.livekit.ui
 import com.dogu.livekit.encryption.EncryptionManager
+import com.dogu.livekit.encryption.KeyManager
 import android.Manifest
 import android.app.NotificationManager
 import android.content.Context
@@ -53,6 +54,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var muteButton: MaterialButton
     private lateinit var speakerButton: MaterialButton
     private lateinit var switchCameraButton: MaterialButton
+    private lateinit var addParticipantButton: MaterialButton
     private lateinit var statusTextView: TextView
     private lateinit var currentUserTextView: TextView
     private lateinit var homePanel: View
@@ -152,9 +154,12 @@ class MainActivity : AppCompatActivity() {
         if (intent?.getBooleanExtra("start_call", false) == true) {
             val url = intent.getStringExtra("url")
             val token = intent.getStringExtra("token")
+            // YENİ: IncomingCallActivity zaten şifreyi çözüp buraya düz metin olarak
+            // yolluyor (bu, sadece cihaz içi bir Intent — hiç ağdan geçmiyor).
+            val roomKey = intent.getStringExtra("room_key")
             if (url != null && token != null) {
                 lifecycleScope.launch {
-                    connectToRoom(url, token, true)
+                    connectToRoom(url, token, true, roomKey)
                 }
             }
         }
@@ -169,6 +174,7 @@ class MainActivity : AppCompatActivity() {
         muteButton = findViewById(R.id.muteButton)
         speakerButton = findViewById(R.id.speakerButton)
         switchCameraButton = findViewById(R.id.switchCameraButton)
+        addParticipantButton = findViewById(R.id.addParticipantButton)
         statusTextView = findViewById(R.id.statusTextView)
         currentUserTextView = findViewById(R.id.currentUserTextView)
         homePanel = findViewById(R.id.home_panel)
@@ -189,7 +195,7 @@ class MainActivity : AppCompatActivity() {
         localVideoRenderer = findViewById(R.id.localVideoRenderer)
         localVideoRenderer.setZOrderMediaOverlay(true) // Diğer SurfaceView'ların üstünde kalması için
         remoteVideosRecyclerView = findViewById(R.id.remoteVideosRecyclerView)
-        
+
         remoteVideosRecyclerView.apply {
             layoutManager = androidx.recyclerview.widget.GridLayoutManager(this@MainActivity, 2).apply {
                 spanSizeLookup = object : androidx.recyclerview.widget.GridLayoutManager.SpanSizeLookup() {
@@ -214,6 +220,7 @@ class MainActivity : AppCompatActivity() {
         muteButton.setOnClickListener { toggleMute() }
         speakerButton.setOnClickListener { toggleSpeaker() }
         switchCameraButton.setOnClickListener { switchCamera() }
+        addParticipantButton.setOnClickListener { showAddParticipantDialog() }
 
         val photoPickerLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri ->
             uri?.let { handleSelectedPhoto(it) }
@@ -373,7 +380,7 @@ class MainActivity : AppCompatActivity() {
         homePanel.visibility = View.VISIBLE
         contactsPanel.visibility = View.GONE
         profilePanel.visibility = View.GONE
-        
+
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
         bottomNav.selectedItemId = R.id.nav_home
         rememberMeCheckBox.isChecked = true
@@ -465,7 +472,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun addUserButton(identity: String, isOnline: Boolean, photoBase64: String? = null, currentRoom: String? = null) {
         val view = layoutInflater.inflate(R.layout.item_contact, dynamicContactsContainer, false)
-        
+
         val avatarImg = view.findViewById<ImageView>(R.id.contactAvatar)
         val nameTv = view.findViewById<TextView>(R.id.contactName)
         val statusDot = view.findViewById<View>(R.id.statusDot)
@@ -474,7 +481,7 @@ class MainActivity : AppCompatActivity() {
         val callBtn = view.findViewById<MaterialButton>(R.id.contactCallBtn)
 
         nameTv.text = identity
-        
+
         if (!photoBase64.isNullOrEmpty()) {
             val bitmap = ImageUtils.base64ToBitmap(photoBase64)
             if (bitmap != null) {
@@ -489,7 +496,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val isInCall = !currentRoom.isNullOrEmpty()
-        
+
         statusDot.backgroundTintList = android.content.res.ColorStateList.valueOf(
             when {
                 isInCall -> ContextCompat.getColor(this, R.color.danger_red)
@@ -512,49 +519,100 @@ class MainActivity : AppCompatActivity() {
             updateGroupCallFab()
         }
 
-        callBtn.text = if (isInCall) "KATIL" else "ARA"
-        callBtn.setIconResource(if (isInCall) android.R.drawable.ic_input_add else android.R.drawable.ic_menu_call)
-        callBtn.backgroundTintList = ContextCompat.getColorStateList(this, 
-            if (isInCall) R.color.success_green else R.color.accent_blue)
-        
+        callBtn.text = if (isInCall) "MEŞGUL" else "ARA"
+        callBtn.setIconResource(android.R.drawable.ic_menu_call)
+        callBtn.backgroundTintList = ContextCompat.getColorStateList(this,
+            if (isInCall) R.color.text_gray else R.color.accent_blue)
+        // YENİ: Artık başkasının görüşmesine rehberden zorla dalınamıyor.
+        // Meşgul kişiler için buton tamamen devre dışı — sadece "MEŞGUL" bilgisini gösteriyor.
+        // Onun yerine, aktif bir görüşme içindeki kişiler "Kullanıcı Ekle" ile
+        // müsait (görüşmede olmayan) birini davet edebiliyor (bkz. showAddParticipantDialog).
+        callBtn.isEnabled = !isInCall
+        callBtn.alpha = if (isInCall) 0.5f else 1f
+
         callBtn.setOnClickListener {
-            if (isInCall) {
-                showJoinDialog(identity, currentRoom!!)
-            } else {
-                startCall(identity)
-            }
+            startCall(identity)
         }
 
         dynamicContactsContainer.addView(view)
     }
 
-    private fun showJoinDialog(targetName: String, roomName: String) {
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Görüşmeye Katıl")
-            .setMessage("$targetName şu an bir görüşmede. Katılmak ister misin?")
-            .setPositiveButton("Katıl") { _, _ -> 
-                joinExistingCall(roomName)
+    // YENİ: Aktif görüşme sırasında "Kullanıcı Ekle" butonuna basılınca açılan akış.
+    // Sadece ŞU AN görüşmede OLMAYAN kişileri listeler — böylece birini zaten
+    // meşgulken tekrar davet edip karışıklık çıkarmıyoruz.
+    private fun showAddParticipantDialog() {
+        val currentRoom = CallManager.room
+        if (currentRoom == null) {
+            Toast.makeText(this, "Aktif bir görüşme yok.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        lifecycleScope.launch {
+            val result = UserRepository.fetchUsers()
+            if (result.isFailure) {
+                Toast.makeText(this@MainActivity, "Kullanıcı listesi alınamadı.", Toast.LENGTH_SHORT).show()
+                return@launch
             }
-            .setNegativeButton("İptal", null)
-            .show()
+
+            val myIdentity = sessionPreferences.getCurrentIdentity()
+            val usersArray = result.getOrNull() ?: return@launch
+
+            // Zaten odada olanları da hariç tutalım (kendimiz ve o an görüşmedeki katılımcılar)
+            val alreadyInThisCall = currentRoom.remoteParticipants.values
+                .mapNotNull { it.identity?.value }
+                .toSet()
+
+            val availableNames = mutableListOf<String>()
+            for (i in 0 until usersArray.length()) {
+                val user = usersArray.getJSONObject(i)
+                val uIdentity = user.getString("identity")
+                val uCurrentRoom = user.optString("currentRoom", "")
+                val isBusy = uCurrentRoom.isNotEmpty() && uCurrentRoom != "null"
+
+                if (uIdentity == myIdentity) continue
+                if (uIdentity in alreadyInThisCall) continue
+                if (isBusy) continue // müsait değilse listeye hiç girmesin
+
+                availableNames.add(uIdentity)
+            }
+
+            if (availableNames.isEmpty()) {
+                Toast.makeText(this@MainActivity, "Davet edilebilecek müsait kimse yok.", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+
+            androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                .setTitle("Kullanıcı Ekle")
+                .setItems(availableNames.toTypedArray()) { _, which ->
+                    inviteParticipantToCurrentCall(availableNames[which])
+                }
+                .setNegativeButton("İptal", null)
+                .show()
+        }
     }
 
-    private fun joinExistingCall(roomName: String) {
-        val identity = sessionPreferences.getCurrentIdentity() ?: "Misafir"
-        showStatus("Görüşmeye dahil olunuyor...", 10000)
-        
+    // Seçilen kişiyi, YENİ bir oda açmadan, ŞU AN İÇİNDE OLDUĞUMUZ görüşmeye davet eder.
+    // "room" parametresini mevcut oda ismiyle vererek sunucunun yeni bir oda üretmesini engelliyoruz.
+    private fun inviteParticipantToCurrentCall(targetIdentity: String) {
+        val myIdentity = sessionPreferences.getCurrentIdentity() ?: return
+        val currentRoomName = CallManager.room?.name ?: return
+        // YENİ: davet edilen kişi, görüşmedeki HERKESLE AYNI oda anahtarına sahip olmalı
+        // (yoksa onun sesini/görüntüsünü çözemez). Bu yüzden CallManager'da sakladığımız
+        // mevcut anahtarı, yeni kişinin genel anahtarıyla tekrar şifreliyoruz.
+        val roomKey = CallManager.currentRoomKey
+
         lifecycleScope.launch {
-            try {
-                // target null, room parametresi dolu gönderiyoruz
-                val result = UserRepository.fetchToken(identity, null, roomName)
-                if (result.isSuccess) {
-                    val json = result.getOrNull()!!
-                    connectToRoom(json.getString("url"), json.getString("token"), true)
-                } else {
-                    Toast.makeText(this@MainActivity, "Katılım başarısız", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                Logger.e("joinExistingCall hatası: ${e.message}")
+            val encryptedKeysJson = if (roomKey != null) {
+                buildEncryptedKeysForTargets(targetIdentity, roomKey)
+            } else {
+                "{}" // görüşme E2EE'siz başladıysa şifrelenecek bir şey yok
+            }
+
+            val result = UserRepository.fetchToken(myIdentity, targetIdentity, currentRoomName, encryptedKeysJson)
+            if (result.isSuccess) {
+                showStatus("$targetIdentity davet edildi, bekleniyor...")
+            } else {
+                Toast.makeText(this@MainActivity, "Davet gönderilemedi.", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -570,7 +628,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun startGroupCall() {
         if (selectedParticipants.isEmpty()) return
-        
+
         val targets = selectedParticipants.joinToString(",")
         startCall(targets) // Mevcut startCall'u virgülle ayrılmış liste ile çağırıyoruz
         selectedParticipants.clear()
@@ -691,7 +749,7 @@ class MainActivity : AppCompatActivity() {
     private fun authOnServer(mode: String) {
         val identity = identityEditText.text.toString().trim()
         val password = passwordEditText.text.toString().trim()
-        
+
         if (identity.isEmpty() || password.isEmpty()) {
             Toast.makeText(this, "Lütfen tüm alanları doldurun", Toast.LENGTH_SHORT).show()
             return
@@ -699,11 +757,16 @@ class MainActivity : AppCompatActivity() {
 
         showStatus("İşlem yapılıyor...", 10000)
 
+        // YENİ: Cihazın RSA anahtar çifti yoksa burada üretiliyor (Keystore'da,
+        // sadece ilk seferde gerçekleşir). Genel anahtarı sunucuya gönderiyoruz ki
+        // başkaları bize E2EE oda anahtarı şifreleyip yollayabilsin.
+        val publicKey = KeyManager.getOrCreatePublicKeyBase64()
+
         FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
             val fcmToken = if (task.isSuccessful) task.result else "NO_TOKEN"
 
             lifecycleScope.launch {
-                val result = UserRepository.auth(mode, identity, password, fcmToken)
+                val result = UserRepository.auth(mode, identity, password, fcmToken, publicKey)
                 if (result.isSuccess) {
                     sessionPreferences.setLoggedIn(true, identity)
                     sessionPreferences.saveRememberMe(identity, password, rememberMeCheckBox.isChecked)
@@ -723,13 +786,13 @@ class MainActivity : AppCompatActivity() {
                             .setNegativeButton("Sonra", null)
                             .show()
                     }
-                    
+
                     navigateToContacts()
                 } else {
                     val exception = result.exceptionOrNull()
                     val errorMsg = if (exception?.message?.contains("401") == true) "Hatalı şifre!"
-                                   else if (exception?.message?.contains("409") == true) "Bu isim zaten alınmış!"
-                                   else "İşlem başarısız: ${exception?.message ?: "Bilinmeyen hata"}"
+                    else if (exception?.message?.contains("409") == true) "Bu isim zaten alınmış!"
+                    else "İşlem başarısız: ${exception?.message ?: "Bilinmeyen hata"}"
                     showStatus(errorMsg)
                 }
             }
@@ -752,7 +815,7 @@ class MainActivity : AppCompatActivity() {
         KeyboardUtils.hideKeyboard(this)
         val callMsg = if (target.contains(",")) "Grup araması yapılıyor..." else "$target aranıyor..."
         showStatus(callMsg, 20000)
-        
+
         runOnUiThread {
             uiContainer.visibility = View.GONE
             findViewById<View>(R.id.bottom_navigation).visibility = View.GONE
@@ -765,7 +828,7 @@ class MainActivity : AppCompatActivity() {
             kotlinx.coroutines.delay(20000)
             val room = CallManager.room
             // Grup görüşmesinde sadece oda boşsa (kimse gelmediyse) aramayı sonlandır
-            if (room == null || room.state == io.livekit.android.room.Room.State.CONNECTING || 
+            if (room == null || room.state == io.livekit.android.room.Room.State.CONNECTING ||
                 room.remoteParticipants.isEmpty()) {
                 Toast.makeText(this@MainActivity, "Kimse yanıt vermedi.", Toast.LENGTH_LONG).show()
                 leaveRoom(true)
@@ -776,10 +839,28 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val result = UserRepository.fetchToken(identity, target, null)
+                // YENİ: Bu görüşme için rastgele, bir kereye mahsus bir oda anahtarı üretiyoruz.
+                val roomKey = EncryptionManager.generateRoomKey()
+                // Her hedefin GENEL anahtarıyla bu oda anahtarını ayrı ayrı şifreliyoruz.
+                val encryptedKeysJson = buildEncryptedKeysForTargets(target, roomKey)
+
+                val result = UserRepository.fetchToken(identity, target, null, encryptedKeysJson)
                 if (result.isSuccess) {
                     val json = result.getOrNull()!!
-                    connectToRoom(json.getString("url"), json.getString("token"), true)
+
+                    // YENİ: Sunucu, aradığımız kişilerden hangilerinin zaten başka bir
+                    // görüşmede olduğunu "busyTargets" dizisiyle bildiriyor. Varsa bilgilendirelim.
+                    val busyTargetsArray = json.optJSONArray("busyTargets")
+                    if (busyTargetsArray != null && busyTargetsArray.length() > 0) {
+                        val busyNames = (0 until busyTargetsArray.length()).map { busyTargetsArray.getString(it) }
+                        Toast.makeText(
+                            this@MainActivity,
+                            "${busyNames.joinToString(", ")} şu an aktif bir görüşmede",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+
+                    connectToRoom(json.getString("url"), json.getString("token"), true, roomKey)
                 } else {
                     val errorMsg = result.exceptionOrNull()?.message ?: "Bilinmeyen hata"
                     Toast.makeText(this@MainActivity, "Arama başarısız: $errorMsg", Toast.LENGTH_LONG).show()
@@ -793,18 +874,51 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // YENİ: Verilen virgüllü hedef listesi için, oda anahtarını her birinin KENDİ
+    // genel anahtarıyla ayrı ayrı şifreleyip { "identity": "şifreliMetin" } JSON'u üretir.
+    // Genel anahtarı henüz kayıtlı olmayan (örn. hiç login olmamış) hedefler atlanır —
+    // o kişi için o an E2EE kurulamaz, aramaya yine de devam edilir.
+    private suspend fun buildEncryptedKeysForTargets(targetCsv: String, roomKey: String): String =
+        withContext(kotlinx.coroutines.Dispatchers.Default) {
+            val targets = targetCsv.split(",").map { it.trim() }.toSet()
+            val obj = org.json.JSONObject()
+
+            val usersResult = UserRepository.fetchUsers()
+            if (usersResult.isSuccess) {
+                val usersArray = usersResult.getOrNull()!!
+                for (i in 0 until usersArray.length()) {
+                    val user = usersArray.getJSONObject(i)
+                    val uid = user.getString("identity")
+                    if (uid !in targets) continue
+
+                    val pubKey = user.optString("publicKey", "")
+                    // GEÇİCİ TEŞHİS LOGU: hedefin genel anahtarı gerçekten var mı?
+                    Logger.d("E2EE_DEBUG: hedef=$uid, publicKey uzunluğu=${pubKey.length}")
+                    if (pubKey.isEmpty()) continue // hedefin genel anahtarı yoksa şifreleyemeyiz
+
+                    val encrypted = KeyManager.encryptForPublicKey(pubKey, roomKey.toByteArray(Charsets.UTF_8))
+                    obj.put(uid, encrypted)
+                    Logger.d("E2EE_DEBUG: $uid için şifrelenmiş anahtar üretildi, uzunluk=${encrypted.length}")
+                }
+            } else {
+                Logger.e("E2EE_DEBUG: fetchUsers başarısız oldu!")
+            }
+            Logger.d("E2EE_DEBUG: sonuç JSON = ${obj.toString()}")
+            obj.toString()
+        }
+
 
 
     private var controlsHideJob: kotlinx.coroutines.Job? = null
 
     private fun setupCallUIInteractions() {
         val rootLayout = findViewById<View>(R.id.fragment_container)
-        
+
         // Ekrana tıklandığında kontrolleri göster/gizle
         rootLayout.setOnClickListener {
             toggleControlsVisibility()
         }
-        
+
         // RecyclerView (videoların olduğu alan) tıklandığında da çalışsın
         remoteVideosRecyclerView.setOnTouchListener { _, event ->
             if (event.action == android.view.MotionEvent.ACTION_UP) {
@@ -824,7 +938,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showControlsWithTimeout() {
         controlsHideJob?.cancel()
-        
+
         runOnUiThread {
             callControls.animate().alpha(1f).setDuration(300).withStartAction {
                 callControls.visibility = View.VISIBLE
@@ -845,36 +959,42 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun connectToRoom(url: String, token: String, useVideo: Boolean) {
+    private suspend fun connectToRoom(url: String, token: String, useVideo: Boolean, roomKey: String?) {
         LiveKit.init(applicationContext)
         Logger.e("CONNECTING TO ROOM: $url with Token: ${token.substring(0, 15)}...")
-        
+
         // AdaptiveStream'i kapatalım ki her track gelsin
+        // YENİ: roomKey null ise (örn. hedefin henüz genel anahtarı yoksa) E2EE'siz
+        // bağlanıyoruz — yoksa dinamik, o göreve özel anahtarla şifreliyoruz.
         val roomOptions = io.livekit.android.RoomOptions(
             adaptiveStream = false,
             dynacast = false,
-                    e2eeOptions = EncryptionManager.getE2EEOptions()
+            e2eeOptions = roomKey?.let { EncryptionManager.getE2EEOptions(it) }
         )
-        
+
+        // YENİ: bu odanın anahtarını CallManager'da tutuyoruz ki "Kullanıcı Ekle" ile
+        // davet edeceğimiz kişiye AYNI anahtarı tekrar şifreleyip yollayabilelim.
+        CallManager.currentRoomKey = roomKey
+
         val newRoom = CallManager.connect(this, url, token, useVideo, localVideoRenderer, null, roomOptions)
 
-        runOnUiThread { 
+        runOnUiThread {
             remoteVideosRecyclerView.visibility = View.VISIBLE
             AudioManagerCompat.setSpeakerphoneOn(this, true)
             isSpeakerOn = true
             isMicMuted = false
-            
+
             speakerButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.accent_blue_alpha)
             speakerButton.setIconResource(R.drawable.ic_speaker_on)
-            
+
             muteButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.accent_blue_alpha)
             muteButton.setIconResource(R.drawable.ic_mic_on)
-            
+
             switchCameraButton.isEnabled = useVideo
             switchCameraButton.alpha = if (useVideo) 1.0f else 0.5f
             switchCameraButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.accent_blue_alpha)
             switchCameraButton.setIconResource(R.drawable.ic_camera_switch)
-            
+
             showStatus("Bağlanıyor...", 5000)
             setupCallUIInteractions()
             showControlsWithTimeout()
@@ -931,7 +1051,7 @@ class MainActivity : AppCompatActivity() {
                             if (identity.isNotEmpty()) {
                                 videoAdapter.removeTrack(identity)
                             }
-                            
+
                             // Sadece hiç kimse kalmadıysa odayı kapat
                             if (newRoom.remoteParticipants.isEmpty()) {
                                 leaveRoom(true)
@@ -943,7 +1063,7 @@ class MainActivity : AppCompatActivity() {
                     is RoomEvent.DataReceived -> {
                         val message = String(event.data)
                         val participantName = event.participant?.identity?.value ?: "Biri"
-                        
+
                         if (message == "REJECTED") {
                             withContext(Dispatchers.Main) {
                                 if (newRoom.remoteParticipants.isEmpty()) {
@@ -956,7 +1076,7 @@ class MainActivity : AppCompatActivity() {
                         } else if (message.startsWith("LEFT_CALL:")) {
                             val whoLeft = message.substringAfter("LEFT_CALL:")
                             withContext(Dispatchers.Main) {
-                                // Video track zaten ParticipantDisconnected ile temizlenecek, 
+                                // Video track zaten ParticipantDisconnected ile temizlenecek,
                                 // burada sadece odayı kapatıp kapatmayacağımıza karar veriyoruz.
                                 if (newRoom.remoteParticipants.isEmpty()) {
                                     leaveRoom(true)
@@ -977,17 +1097,17 @@ class MainActivity : AppCompatActivity() {
             repeat(8) { attempt ->
                 delay(if (attempt == 0) 500 else 2000)
                 Logger.e("Checking for existing participants (Attempt ${attempt + 1})... Count: ${newRoom.remoteParticipants.size}")
-                
+
                 newRoom.remoteParticipants.values.forEach { participant ->
                     Logger.d("Checking Participant: ${participant.identity?.value}")
-                    
+
                     participant.trackPublications.values.forEach { pub ->
                         if (pub is io.livekit.android.room.track.RemoteTrackPublication) {
                             if (!pub.subscribed) {
                                 Logger.d("Yeniden girişte abone olunuyor: ${participant.identity?.value} - ${pub.sid}")
                                 pub.setSubscribed(true)
                             }
-                            
+
                             val track = pub.track as? VideoTrack
                             if (track != null) {
                                 runOnUiThread {
@@ -1012,38 +1132,38 @@ class MainActivity : AppCompatActivity() {
             callControls.visibility = View.VISIBLE
             leaveButton.isEnabled = true
             muteButton.isEnabled = true
-            
-        // Yerel videoyu kesin olarak görünür yapalım
-        if (useVideo) {
-            val localParticipant = newRoom.localParticipant
-            lifecycleScope.launch(Dispatchers.Main) {
-                var retryCount = 0
-                var localTrack: LocalVideoTrack? = null
-                while (retryCount < 20 && localTrack == null) {
-                    localTrack = localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack
-                    if (localTrack == null) {
-                        delay(200)
-                        retryCount++
+
+            // Yerel videoyu kesin olarak görünür yapalım
+            if (useVideo) {
+                val localParticipant = newRoom.localParticipant
+                lifecycleScope.launch(Dispatchers.Main) {
+                    var retryCount = 0
+                    var localTrack: LocalVideoTrack? = null
+                    while (retryCount < 20 && localTrack == null) {
+                        localTrack = localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack
+                        if (localTrack == null) {
+                            delay(200)
+                            retryCount++
+                        }
                     }
-                }
-                
-                if (localTrack != null) {
-                    val identity = sessionPreferences.getCurrentIdentity() ?: "Ben"
-                    videoAdapter.addTrack("$identity (Sen)", localTrack)
-                    remoteVideosRecyclerView.post {
-                        remoteVideosRecyclerView.requestLayout()
-                        videoAdapter.notifyDataSetChanged()
+
+                    if (localTrack != null) {
+                        val identity = sessionPreferences.getCurrentIdentity() ?: "Ben"
+                        videoAdapter.addTrack("$identity (Sen)", localTrack)
+                        remoteVideosRecyclerView.post {
+                            remoteVideosRecyclerView.requestLayout()
+                            videoAdapter.notifyDataSetChanged()
+                        }
                     }
                 }
             }
-        }
         }
     }
 
     private fun leaveRoom(forced: Boolean = false) {
         callTimeoutJob?.cancel()
         AudioManagerCompat.setSpeakerphoneOn(this, false)
-        
+
         lifecycleScope.launch {
             if (!forced) {
                 try {
@@ -1051,13 +1171,13 @@ class MainActivity : AppCompatActivity() {
                     CallManager.publishData("LEFT_CALL:$identity")
                 } catch (e: Exception) {}
             }
-            
+
             withContext(Dispatchers.Main) {
                 CallManager.disconnect(this@MainActivity)
                 videoAdapter.clear()
                 if (!forced) showStatus("Görüşmeden ayrıldın")
                 else showStatus("Görüşme sonlandırıldı")
-                
+
                 uiContainer.visibility = View.VISIBLE
                 findViewById<View>(R.id.bottom_navigation).visibility = View.VISIBLE
                 callControls.visibility = View.GONE
@@ -1072,7 +1192,7 @@ class MainActivity : AppCompatActivity() {
     private fun toggleMute() {
         isMicMuted = !isMicMuted
         lifecycleScope.launch { CallManager.room?.localParticipant?.setMicrophoneEnabled(!isMicMuted) }
-        
+
         muteButton.apply {
             if (isMicMuted) {
                 backgroundTintList = ContextCompat.getColorStateList(context, R.color.danger_red)
@@ -1087,7 +1207,7 @@ class MainActivity : AppCompatActivity() {
     private fun toggleSpeaker() {
         isSpeakerOn = !isSpeakerOn
         AudioManagerCompat.setSpeakerphoneOn(this, isSpeakerOn)
-        
+
         speakerButton.apply {
             if (isSpeakerOn) {
                 backgroundTintList = ContextCompat.getColorStateList(context, R.color.accent_blue_alpha)
@@ -1105,7 +1225,7 @@ class MainActivity : AppCompatActivity() {
         // Çok net: Sadece yerel katılımcının, sadece kamerasını hedefliyoruz
         val localParticipant = room.localParticipant
         val videoTrack = localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack
-        
+
         if (videoTrack != null) {
             lifecycleScope.launch {
                 try {
@@ -1188,9 +1308,9 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         // Beklemeden ilk sinyalleri gönder
         sessionPreferences.getCurrentIdentity()?.let {
-            lifecycleScope.launch { 
+            lifecycleScope.launch {
                 UserRepository.sendHeartbeat(it)
-                refreshContacts() 
+                refreshContacts()
             }
         }
 
@@ -1202,7 +1322,7 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
         heartbeatJob?.cancel()
         autoRefreshJob?.cancel()
-        
+
         // Sadece görüşmede değilsek ve gerçekten çıkıyorsak offline gönder
         if (!CallManager.isBusy()) {
             sessionPreferences.getCurrentIdentity()?.let {

@@ -21,7 +21,7 @@ class IncomingCallActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         // Modern yöntemlerle kilit ekranında göster
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
@@ -32,22 +32,25 @@ class IncomingCallActivity : AppCompatActivity() {
             @Suppress("DEPRECATION")
             window.addFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
+                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                        WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
             )
         }
-        
+
         setContentView(R.layout.activity_incoming_call)
 
         val caller = intent.getStringExtra("incoming_caller") ?: "Bilinmeyen"
         val room = intent.getStringExtra("incoming_room") ?: ""
+        // YENİ: FCM push'u ile birlikte gelen, bize özel şifrelenmiş oda anahtarı.
+        // Henüz çözülmedi — sadece kabul edersek Keystore'daki özel anahtarımızla çözeceğiz.
+        val encryptedRoomKey = intent.getStringExtra("incoming_room_key")
 
         val callerNames = caller.split(",")
         if (callerNames.size > 1) {
             findViewById<TextView>(R.id.callTypeLabel).text = "GRUP ARAMASI"
             findViewById<TextView>(R.id.callerNameText).text = "${callerNames[0]} ve diğerleri"
-            
+
             // Diğer katılımcıları daha net gösteren bir metin
             val others = callerNames.joinToString(", ")
             findViewById<TextView>(R.id.callStatusText).text = "Katılımcılar: $others"
@@ -55,7 +58,7 @@ class IncomingCallActivity : AppCompatActivity() {
             findViewById<TextView>(R.id.callTypeLabel).text = "GELEN ARAMA"
             findViewById<TextView>(R.id.callerNameText).text = caller
         }
-        
+
         // Fotoğrafı sunucudan çekelim
         lifecycleScope.launch {
             val result = UserRepository.fetchUsers()
@@ -83,7 +86,7 @@ class IncomingCallActivity : AppCompatActivity() {
         }
 
         findViewById<MaterialButton>(R.id.acceptButton).setOnClickListener {
-            acceptCall(caller, room)
+            acceptCall(caller, room, encryptedRoomKey)
         }
 
         findViewById<MaterialButton>(R.id.declineButton).setOnClickListener {
@@ -91,7 +94,7 @@ class IncomingCallActivity : AppCompatActivity() {
         }
     }
 
-    private fun acceptCall(caller: String, room: String) {
+    private fun acceptCall(caller: String, room: String, encryptedRoomKey: String?) {
         // Bildirimi kapat
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.cancel(com.dogu.livekit.MyFirebaseMessagingService.CALL_NOTIFICATION_ID)
@@ -99,17 +102,44 @@ class IncomingCallActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val sessionPrefs = SessionPreferences(this@IncomingCallActivity)
             val identity = sessionPrefs.getCurrentIdentity() ?: "Alıcı"
-            
-            // ÖNEMLİ: Bildirimle gelen oda ismini (room) sunucuya geri gönderiyoruz
-            val result = UserRepository.fetchToken(identity, caller, room)
-            
+
+            // ÖNEMLİ: target'ı KASITLI olarak null gönderiyoruz. "room" parametresi zaten
+            // hangi odaya gireceğimizi belirliyor; target'a caller'ı yazarsak sunucu bunu
+            // "yeni bir arama başlatılıyor" sanıp arayan kişiye de (kendi aramasını kabul
+            // ettiği halde) fazladan bir bildirim gönderiyordu. Bu satır o hatayı çözüyor.
+            val result = UserRepository.fetchToken(identity, null, room)
+
             if (result.isSuccess) {
                 val json = result.getOrNull()!!
+
+                // --- DEĞİŞEN KISIM BURASI ---
+                // FCM'den gelen anahtarın Activity'e ulaşıp ulaşmadığını görelim
+                android.util.Log.d("E2EE_TEST", "Gelen encryptedRoomKey değeri: $encryptedRoomKey")
+
+                val decryptedRoomKey: String? = try {
+                    if (encryptedRoomKey.isNullOrEmpty()) {
+                        android.util.Log.w("E2EE_TEST", "encryptedRoomKey null veya boş geldi, şifre çözülemez!")
+                        null
+                    } else {
+                        String(
+                            com.dogu.livekit.encryption.KeyManager.decryptWithPrivateKey(encryptedRoomKey),
+                            Charsets.UTF_8
+                        )
+                    }
+                } catch (e: Exception) {
+                    // Hatayı sadece mesaj olarak değil, tüm detaylarıyla (stack trace) yazdıralım
+                    android.util.Log.e("E2EE_TEST", "Oda anahtarı çözülemedi detaylı hata:", e)
+                    null
+                }
+                // --- DEĞİŞEN KISIM BİTTİ ---
+
                 // MainActivity'ye dön ve bağlan
                 val intent = android.content.Intent(this@IncomingCallActivity, MainActivity::class.java).apply {
                     putExtra("url", json.getString("url"))
                     putExtra("token", json.getString("token"))
                     putExtra("start_call", true)
+                    // Not: bu, sadece cihaz içi bir Intent - çözülmüş anahtar ağa hiç çıkmıyor.
+                    putExtra("room_key", decryptedRoomKey)
                     flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
                 }
                 startActivity(intent)
@@ -120,7 +150,6 @@ class IncomingCallActivity : AppCompatActivity() {
             }
         }
     }
-
     private fun declineCall(room: String) {
         // Bildirimi kapat
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -129,7 +158,7 @@ class IncomingCallActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val sessionPrefs = SessionPreferences(this@IncomingCallActivity)
             val identity = sessionPrefs.getCurrentIdentity() ?: "Alıcı"
-            
+
             // Reddetme sinyalini göndermek için odaya bağlanıyoruz
             val result = UserRepository.fetchToken(identity, "REJECTER", room)
             if (result.isSuccess) {
@@ -137,7 +166,7 @@ class IncomingCallActivity : AppCompatActivity() {
                 val rejectRoom = io.livekit.android.LiveKit.create(applicationContext)
                 try {
                     rejectRoom.connect(json.getString("url"), json.getString("token"))
-                    
+
                     // Bağlantı başarılı olana kadar kısa bir süre bekle (max 5 sn)
                     var retry = 0
                     while (rejectRoom.state != io.livekit.android.room.Room.State.CONNECTED && retry < 25) {
