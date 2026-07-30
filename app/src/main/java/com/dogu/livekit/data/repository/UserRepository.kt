@@ -7,6 +7,7 @@ import com.dogu.livekit.network.NetworkClient
 import com.dogu.livekit.pref.SessionPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import org.json.JSONArray
@@ -42,7 +43,8 @@ class UserRepository @Inject constructor(
                 profilePhoto = user.optString("profilePhoto", ""),
                 currentRoom = currentRoom,
                 publicKey = user.optString("publicKey", ""),
-                needsSync = false 
+                needsSync = false,
+                isBlocked = existing?.isBlocked ?: false
             ))
         }
         if (entities.isNotEmpty()) db.userDao().insertUsers(entities)
@@ -224,4 +226,11 @@ class UserRepository @Inject constructor(
             httpClient.newCall(request).execute().close()
         } catch (e: Exception) {}
     }
+
+    suspend fun updateBlockedStatus(identity: String, isBlocked: Boolean) = withContext(Dispatchers.IO) {
+        db.userDao().updateBlockedStatus(identity, isBlocked)
+    }
+
+    suspend fun getBlockedUsers(): Flow<List<UserEntity>> =
+        db.userDao().getBlockedUsers()
 }

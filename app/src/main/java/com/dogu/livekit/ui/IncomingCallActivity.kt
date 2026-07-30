@@ -32,23 +32,29 @@ class IncomingCallActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Modern yöntemlerle kilit ekranında göster
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
-            val keyguardManager = getSystemService(android.content.Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
-            keyguardManager.requestDismissKeyguard(this, null)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                        WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
-            )
-        }
+        try {
+            // Modern yöntemlerle kilit ekranında göster
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+                setShowWhenLocked(true)
+                setTurnScreenOn(true)
+                val keyguardManager = getSystemService(android.content.Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+                keyguardManager.requestDismissKeyguard(this, null)
+            } else {
+                @Suppress("DEPRECATION")
+                window.addFlags(
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                            WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
+                )
+            }
 
-        setContentView(R.layout.activity_incoming_call)
+            setContentView(R.layout.activity_incoming_call)
+        } catch (e: Exception) {
+            android.util.Log.e("IncomingCallActivity", "setContentView veya window setup hatası", e)
+            finish()
+            return
+        }
 
         val caller = intent.getStringExtra("incoming_caller") ?: "Bilinmeyen"
         val room = intent.getStringExtra("incoming_room") ?: ""
@@ -179,27 +185,31 @@ class IncomingCallActivity : AppCompatActivity() {
             val result = userRepository.fetchToken(identity, "REJECTER", room)
             if (result.isSuccess) {
                 val json = result.getOrNull()!!
-                val rejectRoom = io.livekit.android.LiveKit.create(applicationContext)
                 try {
-                    rejectRoom.connect(json.getString("url"), json.getString("token"))
+                    val rejectRoom = io.livekit.android.LiveKit.create(applicationContext)
+                    try {
+                        rejectRoom.connect(json.getString("url"), json.getString("token"))
 
-                    // Bağlantı başarılı olana kadar kısa bir süre bekle (max 5 sn)
-                    var retry = 0
-                    while (rejectRoom.state != io.livekit.android.room.Room.State.CONNECTED && retry < 25) {
-                        kotlinx.coroutines.delay(200)
-                        retry++
-                    }
+                        // Bağlantı başarılı olana kadar kısa bir süre bekle (max 5 sn)
+                        var retry = 0
+                        while (rejectRoom.state != io.livekit.android.room.Room.State.CONNECTED && retry < 25) {
+                            kotlinx.coroutines.delay(200)
+                            retry++
+                        }
 
-                    if (rejectRoom.state == io.livekit.android.room.Room.State.CONNECTED) {
-                        rejectRoom.localParticipant.publishData("REJECTED".toByteArray())
-                        kotlinx.coroutines.delay(1000) // Verinin sunucuya ulaşması için daha fazla süre tanı
-                        com.dogu.livekit.logging.Logger.d("Reddetme sinyali gönderildi.")
-                    } else {
-                        com.dogu.livekit.logging.Logger.e("Reddetme için odaya bağlanılamadı! State: ${rejectRoom.state}")
+                        if (rejectRoom.state == io.livekit.android.room.Room.State.CONNECTED) {
+                            rejectRoom.localParticipant.publishData("REJECTED".toByteArray())
+                            kotlinx.coroutines.delay(1000) // Verinin sunucuya ulaşması için daha fazla süre tanı
+                            com.dogu.livekit.logging.Logger.d("Reddetme sinyali gönderildi.")
+                        } else {
+                            com.dogu.livekit.logging.Logger.e("Reddetme için odaya bağlanılamadı! State: ${rejectRoom.state}")
+                        }
+                        rejectRoom.disconnect()
+                    } catch (e: Exception) {
+                        com.dogu.livekit.logging.Logger.e("declineCall hatası: ${e.message}")
                     }
-                    rejectRoom.disconnect()
                 } catch (e: Exception) {
-                    com.dogu.livekit.logging.Logger.e("declineCall hatası: ${e.message}")
+                    com.dogu.livekit.logging.Logger.e("LiveKit.create() hatası: ${e.message}", e)
                 }
             }
             finish()

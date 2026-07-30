@@ -37,57 +37,63 @@ object CallManager {
         val serviceIntent = Intent(context, CallService::class.java)
         ContextCompat.startForegroundService(context, serviceIntent)
 
-        // Önceki odadan temiz ayrıl
-        room?.disconnect()
+        try {
+            // Önceki odadan temiz ayrıl
+            room?.disconnect()
 
-        val newRoom = LiveKit.create(context, roomOptions ?: RoomOptions())
-        room = newRoom // Bağlanmadan önce atayalım ki isBusy() doğru çalışsın
+            val newRoom = LiveKit.create(context, roomOptions ?: RoomOptions())
+            room = newRoom // Bağlanmadan önce atayalım ki isBusy() doğru çalışsın
 
-        // ÖNEMLİ: Renderer ilklendirmesini ana thread'de yapmalıyız
-        withContext(Dispatchers.Main) {
-            try {
-                localRenderer?.let { newRoom.initVideoRenderer(it) }
-                remoteRenderer?.let { newRoom.initVideoRenderer(it) }
-            } catch (e: Exception) {
-                Logger.e("Renderer init hatası: ${e.message}")
-            }
-        }
-
-        newRoom.connect(url, token)
-        newRoom.localParticipant.setMicrophoneEnabled(true)
-
-        if (useVideo) {
-            newRoom.localParticipant.setCameraEnabled(true)
-
-            // Yerel track'i yakalamak için daha güvenli bir yöntem: Events üzerinden dinleyelim
-            // Ama hızlıca getTrackPublication ile de kontrol edelim
-
+            // ÖNEMLİ: Renderer ilklendirmesini ana thread'de yapmalıyız
             withContext(Dispatchers.Main) {
-                var retryCount = 0
-                var localTrack: LocalVideoTrack? = null
-                while (retryCount < 20 && localTrack == null) {
-                    localTrack = newRoom.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack
-                    if (localTrack == null) {
-                        delay(200)
-                        retryCount++
+                try {
+                    localRenderer?.let { newRoom.initVideoRenderer(it) }
+                    remoteRenderer?.let { newRoom.initVideoRenderer(it) }
+                } catch (e: Exception) {
+                    Logger.e("Renderer init hatası: ${e.message}")
+                }
+            }
+
+            newRoom.connect(url, token)
+            newRoom.localParticipant.setMicrophoneEnabled(true)
+
+            if (useVideo) {
+                newRoom.localParticipant.setCameraEnabled(true)
+
+                // Yerel track'i yakalamak için daha güvenli bir yöntem: Events üzerinden dinleyelim
+                // Ama hızlıca getTrackPublication ile भी kontrol edelim
+
+                withContext(Dispatchers.Main) {
+                    var retryCount = 0
+                    var localTrack: LocalVideoTrack? = null
+                    while (retryCount < 20 && localTrack == null) {
+                        localTrack = newRoom.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack
+                        if (localTrack == null) {
+                            delay(200)
+                            retryCount++
+                        }
+                    }
+
+                    if (localTrack != null && localRenderer != null) {
+                        localRenderer.setScalingType(livekit.org.webrtc.RendererCommon.ScalingType.SCALE_ASPECT_FILL)
+                        localRenderer.setMirror(true) // Yerel kamera görüntüsü aynalanır
+                        localTrack.addRenderer(localRenderer)
+                        localRenderer.visibility = android.view.View.VISIBLE
+                        Logger.d("Yerel kamera track'i renderer'a başarıyla eklendi.")
+                    } else if (localTrack != null) {
+                        Logger.d("Yerel kamera track'i oluşturuldu ama renderer null, manuel eklenebilir.")
+                    } else {
+                        Logger.e("Yerel kamera track'i oluşturulamadı! Manuel deneme...")
                     }
                 }
-
-                if (localTrack != null && localRenderer != null) {
-                    localRenderer.setScalingType(livekit.org.webrtc.RendererCommon.ScalingType.SCALE_ASPECT_FILL)
-                    localRenderer.setMirror(true) // Yerel kamera görüntüsü aynalanır
-                    localTrack.addRenderer(localRenderer)
-                    localRenderer.visibility = android.view.View.VISIBLE
-                    Logger.d("Yerel kamera track'i renderer'a başarıyla eklendi.")
-                } else if (localTrack != null) {
-                    Logger.d("Yerel kamera track'i oluşturuldu ama renderer null, manuel eklenebilir.")
-                } else {
-                    Logger.e("Yerel kamera track'i oluşturulamadı! Manuel deneme...")
-                }
             }
-        }
 
-        return newRoom
+            return newRoom
+        } catch (e: Exception) {
+            Logger.e("CallManager.connect hatası", e)
+            disconnect(context)
+            throw e
+        }
     }
 
     fun disconnect(context: Context? = null) {

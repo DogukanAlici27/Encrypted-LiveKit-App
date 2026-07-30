@@ -16,6 +16,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.RecyclerView
 import com.dogu.livekit.R
 import com.dogu.livekit.call.CallManager
 import com.dogu.livekit.hardware.AudioManagerCompat
@@ -100,6 +101,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var settingsMenuPanel: View
     private lateinit var accountSettingsPanel: View
     private lateinit var themeSettingsPanel: View
+    private lateinit var blockedSettingsPanel: View
     private lateinit var accountUsernameTextView: TextView
     private lateinit var themeDarkCheck: ImageView
     private lateinit var themeLightCheck: ImageView
@@ -108,6 +110,8 @@ class MainActivity : AppCompatActivity() {
 
     private val selectedParticipants = mutableSetOf<String>()
     private lateinit var groupCallFab: com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+
+    private lateinit var blockedRecyclerView: androidx.recyclerview.widget.RecyclerView
 
     private lateinit var remoteVideosRecyclerView: androidx.recyclerview.widget.RecyclerView
     private val videoAdapter = VideoAdapter()
@@ -125,49 +129,68 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // Kaydedilmiş tema tercihini setContentView'dan ÖNCE uygula
-        if (sessionPreferences.isDarkTheme()) {
-            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
-        } else {
-            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
-        }
 
-        enableEdgeToEdge()
-        setContentView(R.layout.activity_main)
-
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.bottom_navigation)) { view, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.updatePadding(bottom = systemBars.bottom)
-            insets
-        }
-
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.header_layout)) { view, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.updatePadding(top = systemBars.top)
-            insets
-        }
-
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (CallManager.room != null || callControls.visibility == View.VISIBLE) {
-                    leaveRoom(false)
-                } else {
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
-                    isEnabled = true
-                }
+        try {
+            // Kaydedilmiş tema tercihini setContentView'dan ÖNCE uygula
+            if (sessionPreferences.isDarkTheme()) {
+                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+            } else {
+                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
             }
-        })
 
-        bindUI()
-        observeViewModel()
-        loadSession()
-        checkAndRequestPermissions()
-        handleIntent(intent)
-        
-        startBackgroundWorkers()
-        performInitialSync()
+            enableEdgeToEdge()
+            setContentView(R.layout.activity_main)
+
+            try {
+                val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
+                ViewCompat.setOnApplyWindowInsetsListener(bottomNav) { view, insets ->
+                    val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+                    view.updatePadding(bottom = systemBars.bottom)
+                    insets
+                }
+            } catch (e: Exception) {
+                Logger.e("bottom_navigation bulunamadı", e)
+            }
+
+            try {
+                val headerLayout = findViewById<View>(R.id.header_layout)
+                ViewCompat.setOnApplyWindowInsetsListener(headerLayout) { view, insets ->
+                    val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+                    view.updatePadding(top = systemBars.top)
+                    insets
+                }
+            } catch (e: Exception) {
+                Logger.e("header_layout bulunamadı", e)
+            }
+
+            onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (CallManager.room != null || callControls.visibility == View.VISIBLE) {
+                        leaveRoom(false)
+                    } else {
+                        isEnabled = false
+                        onBackPressedDispatcher.onBackPressed()
+                        isEnabled = true
+                    }
+                }
+            })
+
+            Logger.d("bindUI başlıyor...")
+            bindUI()
+            Logger.d("bindUI bitti!")
+
+            observeViewModel()
+            loadSession()
+            checkAndRequestPermissions()
+            handleIntent(intent)
+
+            startBackgroundWorkers()
+            performInitialSync()
+        } catch (e: Exception) {
+            Logger.e("MainActivity onCreate CRASH!", e)
+            android.util.Log.e("MainActivity", "FULL CRASH:", e)
+            finish()
+        }
     }
 
     private fun observeViewModel() {
@@ -284,18 +307,19 @@ class MainActivity : AppCompatActivity() {
         dynamicContactsContainer.removeAllViews()
         val query = contactSearchEditText.text.toString().lowercase().trim()
         val myIdentity = sessionPreferences.getCurrentIdentity()?.lowercase() ?: ""
-        
+
         var count = 0
         entities.forEach { user ->
             if (user.identity.lowercase() == myIdentity) return@forEach
             if (query.isNotEmpty() && !user.identity.lowercase().contains(query)) return@forEach
-            
+            if (user.isBlocked) return@forEach // Engellenenleri rehberden gizle
+
             // Uygulama genelinde bağlantı yoksa herkesi çevrimdışı göster
             val effectiveOnline = if (isAppOffline) false else user.isOnline
             addUserButton(user.identity, effectiveOnline, user.profilePhoto, user.currentRoom)
             count++
         }
-        
+
         contactsCountBadge.text = count.toString()
         contactsCountBadge.visibility = if (count > 0) View.VISIBLE else View.GONE
     }
@@ -308,7 +332,7 @@ class MainActivity : AppCompatActivity() {
             WorkRequest.MIN_BACKOFF_MILLIS,
             TimeUnit.MILLISECONDS
         ).build()
-        
+
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             "livekit_heartbeat",
             ExistingPeriodicWorkPolicy.KEEP,
@@ -374,33 +398,40 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindUI() {
-        identityEditText = findViewById(R.id.identityEditText)
-        passwordEditText = findViewById(R.id.passwordEditText)
-        rememberMeCheckBox = findViewById(R.id.rememberMeCheckBox)
-        rememberMeCheckBox.isChecked = true
-        leaveButton = findViewById(R.id.leaveButton)
-        muteButton = findViewById(R.id.muteButton)
-        speakerButton = findViewById(R.id.speakerButton)
-        switchCameraButton = findViewById(R.id.switchCameraButton)
-        addParticipantButton = findViewById(R.id.addParticipantButton)
-        statusTextView = findViewById(R.id.statusTextView)
-        currentUserTextView = findViewById(R.id.currentUserTextView)
-        homePanel = findViewById(R.id.home_panel)
-        contactsPanel = findViewById(R.id.contacts_panel)
-        profilePanel = findViewById(R.id.profile_panel)
-        dynamicContactsContainer = findViewById(R.id.dynamic_contacts_container)
-        callControls = findViewById(R.id.call_controls)
-        uiContainer = findViewById(R.id.ui_container)
-        currentProfilePhotoImg = findViewById(R.id.currentProfilePhotoImg)
-        contactsCountBadge = findViewById(R.id.contactsCountBadge)
-        contactSearchEditText = findViewById(R.id.contactSearchEditText)
-        settingsMenuPanel = findViewById(R.id.settingsMenuPanel)
-        accountSettingsPanel = findViewById(R.id.accountSettingsPanel)
-        themeSettingsPanel = findViewById(R.id.themeSettingsPanel)
-        accountUsernameTextView = findViewById(R.id.accountUsernameTextView)
-        themeDarkCheck = findViewById(R.id.themeDarkCheck)
-        themeLightCheck = findViewById(R.id.themeLightCheck)
-        connectionStatusBadge = findViewById(R.id.connectionStatusBadge)
+        try {
+            identityEditText = findViewById(R.id.identityEditText) ?: return
+            passwordEditText = findViewById(R.id.passwordEditText) ?: return
+            rememberMeCheckBox = findViewById(R.id.rememberMeCheckBox) ?: return
+            rememberMeCheckBox.isChecked = true
+            leaveButton = findViewById(R.id.leaveButton) ?: return
+            muteButton = findViewById(R.id.muteButton) ?: return
+            speakerButton = findViewById(R.id.speakerButton) ?: return
+            switchCameraButton = findViewById(R.id.switchCameraButton) ?: return
+            addParticipantButton = findViewById(R.id.addParticipantButton) ?: return
+            statusTextView = findViewById(R.id.statusTextView) ?: return
+            currentUserTextView = findViewById(R.id.currentUserTextView) ?: return
+            homePanel = findViewById(R.id.home_panel) ?: return
+            contactsPanel = findViewById(R.id.contacts_panel) ?: return
+            profilePanel = findViewById(R.id.profile_panel) ?: return
+            dynamicContactsContainer = findViewById(R.id.dynamic_contacts_container) ?: return
+            callControls = findViewById(R.id.call_controls) ?: return
+            uiContainer = findViewById(R.id.ui_container) ?: return
+            currentProfilePhotoImg = findViewById(R.id.currentProfilePhotoImg) ?: return
+            contactsCountBadge = findViewById(R.id.contactsCountBadge) ?: return
+            contactSearchEditText = findViewById(R.id.contactSearchEditText) ?: return
+            settingsMenuPanel = findViewById(R.id.settingsMenuPanel) ?: return
+            accountSettingsPanel = findViewById(R.id.accountSettingsPanel) ?: return
+            themeSettingsPanel = findViewById(R.id.themeSettingsPanel) ?: return
+            blockedSettingsPanel = findViewById(R.id.blockedSettingsPanel) ?: return
+            accountUsernameTextView = findViewById(R.id.accountUsernameTextView) ?: return
+            themeDarkCheck = findViewById(R.id.themeDarkCheck) ?: return
+            themeLightCheck = findViewById(R.id.themeLightCheck) ?: return
+            connectionStatusBadge = findViewById(R.id.connectionStatusBadge) ?: return
+            blockedRecyclerView = findViewById(R.id.blockedRecyclerView) ?: return
+        } catch (e: Exception) {
+            Logger.e("bindUI - View binding hatası!", e)
+            return
+        }
 
         historyPanel = findViewById(R.id.history_panel)
         historyRecyclerView = findViewById(R.id.historyRecyclerView)
@@ -481,6 +512,16 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<View>(R.id.themeBackRow).setOnClickListener {
             themeSettingsPanel.visibility = View.GONE
+            settingsMenuPanel.visibility = View.VISIBLE
+        }
+
+        findViewById<View>(R.id.settingsBlockedRow).setOnClickListener {
+            settingsMenuPanel.visibility = View.GONE
+            blockedSettingsPanel.visibility = View.VISIBLE
+            loadBlockedUsers()
+        }
+        findViewById<View>(R.id.blockedBackRow).setOnClickListener {
+            blockedSettingsPanel.visibility = View.GONE
             settingsMenuPanel.visibility = View.VISIBLE
         }
 
@@ -673,6 +714,52 @@ class MainActivity : AppCompatActivity() {
         contactsViewModel.refreshContacts()
     }
 
+    private fun loadBlockedUsers() {
+        lifecycleScope.launch {
+            userRepository.getBlockedUsers().collect { blocked ->
+                withContext(Dispatchers.Main) {
+                    blockedRecyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this@MainActivity)
+                    blockedRecyclerView.adapter = BlockedUsersAdapter(blocked)
+                }
+            }
+        }
+    }
+
+    private inner class BlockedUsersAdapter(private val users: List<com.dogu.livekit.data.entity.UserEntity>) :
+        RecyclerView.Adapter<BlockedUsersAdapter.BlockedViewHolder>() {
+
+        inner class BlockedViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val name: TextView = view.findViewById(R.id.contactName)
+            val actionBtn: MaterialButton = view.findViewById(R.id.contactCallBtn)
+            val statusDot: View = view.findViewById(R.id.statusDot)
+            val statusTv: TextView = view.findViewById(R.id.contactStatus)
+            val selectCb: CheckBox = view.findViewById(R.id.contactSelectCb)
+        }
+
+        override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): BlockedViewHolder {
+            val view = layoutInflater.inflate(R.layout.item_contact, parent, false)
+            return BlockedViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: BlockedViewHolder, position: Int) {
+            val user = users[position]
+            holder.name.text = user.identity
+            holder.statusDot.visibility = View.GONE
+            holder.statusTv.visibility = View.GONE
+            holder.selectCb.visibility = View.GONE
+
+            holder.actionBtn.text = "KALDIR"
+            holder.actionBtn.backgroundTintList = ContextCompat.getColorStateList(this@MainActivity, R.color.success_green)
+            holder.actionBtn.setOnClickListener {
+                contactsViewModel.toggleBlockUser(user.identity, false)
+                loadBlockedUsers()
+                showStatus("${user.identity} engeli kaldırıldı")
+            }
+        }
+
+        override fun getItemCount() = users.size
+    }
+
     private fun updateConnectionStatusBadge(isOnline: Boolean) {
         val previousState = isAppOffline
         isAppOffline = !isOnline
@@ -724,7 +811,7 @@ class MainActivity : AppCompatActivity() {
             if (identity == currentIdentity) continue
             if (trimmedQuery.isNotEmpty() && !identity.lowercase().contains(trimmedQuery)) continue
 
-            // Eğer uygulama çevrimdışıysa, kimseden anlık bilgi alamayacağımız için 
+            // Eğer uygulama çevrimdışıysa, kimseden anlık bilgi alamayacağımız için
             // herkesi çevrimdışı gösteriyoruz.
             if (isAppOffline) isOnline = false
 
@@ -775,8 +862,20 @@ class MainActivity : AppCompatActivity() {
             setDefaultAvatar(avatarImg)
         }
 
-        // Sadece Çevrimiçiyse ve odası geçerli bir değerse "Görüşmede" sayılır
         val isInCall = isOnline && !currentRoom.isNullOrEmpty() && currentRoom != "null"
+
+        view.setOnLongClickListener {
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Kişiyi Engelle")
+                .setMessage("$identity kullanıcısını engellemek istiyor musunuz? Engellenen kişiler sizi arayamaz ve rehberinizde görünmez.")
+                .setPositiveButton("Engelle") { _, _ ->
+                    contactsViewModel.toggleBlockUser(identity, true)
+                    showStatus("$identity engellendi")
+                }
+                .setNegativeButton("İptal", null)
+                .show()
+            true
+        }
 
         statusDot.backgroundTintList = android.content.res.ColorStateList.valueOf(
             when {
@@ -809,7 +908,7 @@ class MainActivity : AppCompatActivity() {
         callBtn.setIconResource(android.R.drawable.ic_menu_call)
         callBtn.backgroundTintList = ContextCompat.getColorStateList(this,
             if (!canCall) R.color.text_gray else R.color.accent_blue)
-        
+
         callBtn.isEnabled = canCall
         callBtn.alpha = if (!canCall) 0.5f else 1f
 
@@ -952,7 +1051,7 @@ class MainActivity : AppCompatActivity() {
         callBtn.text = if (isInCall) "MEŞGUL" else "DAVET ET"
         callBtn.isEnabled = isInviteable
         callBtn.alpha = if (isInviteable) 1f else 0.5f
-        callBtn.backgroundTintList = ContextCompat.getColorStateList(this, 
+        callBtn.backgroundTintList = ContextCompat.getColorStateList(this,
             if (isInviteable) R.color.accent_blue else R.color.text_gray)
 
         callBtn.setOnClickListener {
@@ -1281,269 +1380,276 @@ class MainActivity : AppCompatActivity() {
     }
 
     private suspend fun connectToRoom(url: String, token: String, useVideo: Boolean, roomKey: String?) {
-        LiveKit.init(applicationContext)
-        Logger.e("CONNECTING TO ROOM: $url with Token: ${token.substring(0, 15)}...")
+        try {
+            Logger.e("CONNECTING TO ROOM: $url with Token: ${token.substring(0, 15)}...")
 
-        val myIdentity = sessionPreferences.getCurrentIdentity() ?: "Ben"
-        val localIdentity = "$myIdentity (Sen)"
+            val myIdentity = sessionPreferences.getCurrentIdentity() ?: "Ben"
+            val localIdentity = "$myIdentity (Sen)"
 
-        // AdaptiveStream'i kapatalım ki her track gelsin
-        // YENİ: roomKey null ise (örn. hedefin henüz genel anahtarı yoksa) E2EE'siz
-        // bağlanıyoruz — yoksa dinamik, o göreve özel anahtarla şifreliyoruz.
-        val roomOptions = io.livekit.android.RoomOptions(
-            adaptiveStream = false,
-            dynacast = false,
-            e2eeOptions = roomKey?.let { EncryptionManager.getE2EEOptions(it) }
-        )
+            // AdaptiveStream'i kapatalım ki her track gelsin
+            // YENİ: roomKey null ise (örn. hedefin henüz genel anahtarı yoksa) E2EE'siz
+            // bağlanıyoruz — yoksa dinamik, o göreve özel anahtarla şifreliyoruz.
+            val roomOptions = io.livekit.android.RoomOptions(
+                adaptiveStream = false,
+                dynacast = false,
+                e2eeOptions = roomKey?.let { EncryptionManager.getE2EEOptions(it) }
+            )
 
-        // YENİ: bu odanın anahtarını CallManager'da tutuyoruz ki "Kullanıcı Ekle" ile
-        // davet edeceğimiz kişiye AYNI anahtarı tekrar şifreleyip yollayabilelim.
-        CallManager.currentRoomKey = roomKey
-        val newRoom = CallManager.connect(
-            this,
-            url,
-            token,
-            useVideo,
-            null,
-            null,
-            roomOptions
-        )
+            // YENİ: bu odanın anahtarını CallManager'da tutuyoruz ki "Kullanıcı Ekle" ile
+            // davet edeceğimiz kişiye AYNI anahtarı tekrar şifreleyip yollayabilelim.
+            CallManager.currentRoomKey = roomKey
+            val newRoom = CallManager.connect(
+                this,
+                url,
+                token,
+                useVideo,
+                null,
+                null,
+                roomOptions
+            )
 
-        runOnUiThread {
-            remoteVideosRecyclerView.visibility = View.VISIBLE
-            AudioManagerCompat.setSpeakerphoneOn(this, true)
-            isSpeakerOn = true
-            isMicMuted = false
+            runOnUiThread {
+                remoteVideosRecyclerView.visibility = View.VISIBLE
+                AudioManagerCompat.setSpeakerphoneOn(this, true)
+                isSpeakerOn = true
+                isMicMuted = false
 
-            speakerButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.accent_blue_alpha)
-            speakerButton.setIconResource(R.drawable.ic_speaker_on)
+                speakerButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.accent_blue_alpha)
+                speakerButton.setIconResource(R.drawable.ic_speaker_on)
 
-            muteButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.accent_blue_alpha)
-            muteButton.setIconResource(R.drawable.ic_mic_on)
+                muteButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.accent_blue_alpha)
+                muteButton.setIconResource(R.drawable.ic_mic_on)
 
-            switchCameraButton.isEnabled = useVideo
-            switchCameraButton.alpha = if (useVideo) 1.0f else 0.5f
-            switchCameraButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.accent_blue_alpha)
-            switchCameraButton.setIconResource(R.drawable.ic_camera_switch)
-            callViewModel.setCameraState(useVideo)
-            // isCameraCurrentlyOn was removed, using callViewModel state
-            showStatus("Bağlanıyor...", 5000)
-            setupCallUIInteractions()
-            showControlsWithTimeout()
-        }
-
-        // Remote trackları ve olayları dinle
-        lifecycleScope.launch {
-            newRoom.events.collect { event ->
-                when (event) {
-                    is RoomEvent.TrackSubscribed -> {
-                        val track = event.track
-                        val participant = event.participant
-                        Logger.e("Track Subscribed: ${participant.identity?.value}, Track Type: ${track::class.java.simpleName}")
-                        if (track is VideoTrack) {
-                            runOnUiThread {
-                                val identity = participant.identity?.value ?: "Bilinmeyen"
-                                if (videoAdapter.addTrack(identity, track)) {
-                                    // Başlangıçta sessize alınmışsa siyah ekranı göster
-                                    if (event.publication.muted) {
-                                        videoAdapter.setCameraEnabled(identity, false)
-                                    }
-                                    remoteVideosRecyclerView.post {
-                                        remoteVideosRecyclerView.requestLayout()
-                                        videoAdapter.notifyDataSetChanged()
-                                    }
-                                }
-                                showStatus("Yeni katılımcı bağlandı: ${participant.identity?.value}")
-                            }
-                        }
-                    }
-                    is RoomEvent.TrackMuted -> {
-                        val participant = event.participant
-                        val isLocal = participant is io.livekit.android.room.participant.LocalParticipant
-                        val identity = if (isLocal) localIdentity else participant.identity?.value ?: ""
-                        if (identity.isNotEmpty() && event.publication.kind == Track.Kind.VIDEO) {
-                            runOnUiThread { videoAdapter.setCameraEnabled(identity, false) }
-                        }
-                    }
-                    is RoomEvent.TrackUnmuted -> {
-                        val participant = event.participant
-                        val isLocal = participant is io.livekit.android.room.participant.LocalParticipant
-                        val identity = if (isLocal) localIdentity else participant.identity?.value ?: ""
-                        if (identity.isNotEmpty() && event.publication.kind == Track.Kind.VIDEO) {
-                            runOnUiThread { videoAdapter.setCameraEnabled(identity, true) }
-                        }
-                    }
-                    is RoomEvent.TrackPublished -> {
-                        // Birisi yeni bir track paylaştığında otomatik abone ol
-                        val pub = event.publication as? io.livekit.android.room.track.RemoteTrackPublication
-                        pub?.setSubscribed(true)
-                    }
-                    is RoomEvent.ParticipantConnected -> {
-                        val participant = event.participant
-                        Logger.e("PARTICIPANT JOINED: ${participant.identity?.value}. Remote Count: ${newRoom.remoteParticipants.size}")
-                        showStatus("Katılımcı girdi: ${participant.identity?.value}")
-                    }
-                    is RoomEvent.TrackE2EEStateEvent -> {
-                        Logger.d("${event.participant.identity?.value} E2EE durumu: ${event.state}")
-                    }
-                    is RoomEvent.TrackUnsubscribed -> {
-                        val participant = event.participant
-                        val identity = participant.identity?.value ?: ""
-                        runOnUiThread {
-                            Logger.e("Track Unsubscribed: $identity")
-                            if (identity.isNotEmpty()) {
-                                videoAdapter.removeTrack(identity)
-                            }
-                        }
-                    }
-                    is RoomEvent.ParticipantDisconnected -> {
-                        val participant = event.participant
-                        val identity = participant.identity?.value ?: ""
-                        Logger.e("EVENT: ParticipantDisconnected -> $identity. Kalan Remote: ${newRoom.remoteParticipants.size}")
-                        
-                        runOnUiThread {
-                            if (identity.isNotEmpty()) {
-                                videoAdapter.removeTrack(identity)
-                            }
-
-                            // Sadece hiç kimse kalmadıysa odayı kapat
-                            if (newRoom.remoteParticipants.isEmpty()) {
-                                Logger.e("Odada kimse kalmadı, ayrılıyoruz.")
-                                leaveRoom(true)
-                            } else {
-                                showStatus("$identity görüşmeden ayrıldı.")
-                            }
-                        }
-                    }
-                    is RoomEvent.Disconnected -> {
-                        Logger.e("EVENT: Room Disconnected (Oda bağlantısı tamamen koptu)")
-                        runOnUiThread {
-                            leaveRoom(true)
-                            showStatus("Görüşme sunucu tarafından sonlandırıldı.")
-                        }
-                    }
-                    is RoomEvent.DataReceived -> {
-                        val message = String(event.data)
-                        val participantName = event.participant?.identity?.value ?: "Biri"
-                        Logger.d("DataReceived: $message from $participantName")
-
-                        if (message == "REJECTED") {
-                            withContext(Dispatchers.Main) {
-                                if (newRoom.remoteParticipants.isEmpty()) {
-                                    callTimeoutJob?.cancel()
-                                    leaveRoom(true)
-                                } else {
-                                    showStatus("$participantName aramayı reddetti.")
-                                }
-                            }
-                        } else if (message.startsWith("LEFT_CALL:")) {
-                            val whoLeft = message.substringAfter("LEFT_CALL:")
-                            Logger.e("Kullanıcı ayrılma mesajı yolladı: $whoLeft. Kalan: ${newRoom.remoteParticipants.size}")
-                            
-                            withContext(Dispatchers.Main) {
-                                // Eğer mesajı atan kişi remoteParticipants listesindeyse ve 
-                                // listede başka kimse yoksa (veya sadece o varsa) hemen çıkalım.
-                                // Bazı durumlarda ParticipantDisconnected mesajdan sonra gelir.
-                                val remoteSize = newRoom.remoteParticipants.size
-                                val senderSid = event.participant?.sid
-                                
-                                val shouldLeave = if (remoteSize == 0) true
-                                else if (remoteSize == 1 && senderSid != null) {
-                                    // Eğer odadaki tek kişi mesajı atan kişiyse
-                                    newRoom.remoteParticipants.values.any { it.sid == senderSid }
-                                } else false
-
-                                if (shouldLeave) {
-                                    Logger.e("Son katılımcı da ayrıldı (mesaj yoluyla), çıkılıyor...")
-                                    leaveRoom(true)
-                                } else {
-                                    showStatus("$whoLeft görüşmeden ayrıldı.")
-                                }
-                            }
-                        }
-                    }
-                    else -> {}
-                }
+                switchCameraButton.isEnabled = useVideo
+                switchCameraButton.alpha = if (useVideo) 1.0f else 0.5f
+                switchCameraButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.accent_blue_alpha)
+                switchCameraButton.setIconResource(R.drawable.ic_camera_switch)
+                callViewModel.setCameraState(useVideo)
+                // isCameraCurrentlyOn was removed, using callViewModel state
+                showStatus("Bağlanıyor...", 5000)
+                setupCallUIInteractions()
+                showControlsWithTimeout()
             }
-        }
 
-        // Zaten odada olan tracklar varsa (Garantili ekleme)
-        lifecycleScope.launch {
-            // İlk 15 saniye boyunca periyodik kontrol
-            repeat(8) { attempt ->
-                delay(if (attempt == 0) 500.milliseconds else 2000.milliseconds)
-                Logger.e("Checking for existing participants (Attempt ${attempt + 1})... Count: ${newRoom.remoteParticipants.size}")
-
-                newRoom.remoteParticipants.values.forEach { participant ->
-                    Logger.d("Checking Participant: ${participant.identity?.value}")
-
-                    participant.trackPublications.values.forEach { pub ->
-                        if (pub is io.livekit.android.room.track.RemoteTrackPublication) {
-                            if (!pub.subscribed) {
-                                Logger.d("Yeniden girişte abone olunuyor: ${participant.identity?.value} - ${pub.sid}")
-                                pub.setSubscribed(true)
-                            }
-
-                            val track = pub.track as? VideoTrack
-                            if (track != null) {
+            // Remote trackları ve olayları dinle
+            lifecycleScope.launch {
+                newRoom.events.collect { event ->
+                    when (event) {
+                        is RoomEvent.TrackSubscribed -> {
+                            val track = event.track
+                            val participant = event.participant
+                            Logger.e("Track Subscribed: ${participant.identity?.value}, Track Type: ${track::class.java.simpleName}")
+                            if (track is VideoTrack) {
                                 runOnUiThread {
                                     val identity = participant.identity?.value ?: "Bilinmeyen"
                                     if (videoAdapter.addTrack(identity, track)) {
-                                        if (pub.muted) {
+                                        // Başlangıçta sessize alınmışsa siyah ekranı göster
+                                        if (event.publication.muted) {
                                             videoAdapter.setCameraEnabled(identity, false)
                                         }
-                                        Logger.e("Existing Track added for: $identity")
                                         remoteVideosRecyclerView.post {
                                             remoteVideosRecyclerView.requestLayout()
                                             videoAdapter.notifyDataSetChanged()
                                         }
                                     }
+                                    showStatus("Yeni katılımcı bağlandı: ${participant.identity?.value}")
+                                }
+                            }
+                        }
+                        is RoomEvent.TrackMuted -> {
+                            val participant = event.participant
+                            val isLocal = participant is io.livekit.android.room.participant.LocalParticipant
+                            val identity = if (isLocal) localIdentity else participant.identity?.value ?: ""
+                            if (identity.isNotEmpty() && event.publication.kind == Track.Kind.VIDEO) {
+                                runOnUiThread { videoAdapter.setCameraEnabled(identity, false) }
+                            }
+                        }
+                        is RoomEvent.TrackUnmuted -> {
+                            val participant = event.participant
+                            val isLocal = participant is io.livekit.android.room.participant.LocalParticipant
+                            val identity = if (isLocal) localIdentity else participant.identity?.value ?: ""
+                            if (identity.isNotEmpty() && event.publication.kind == Track.Kind.VIDEO) {
+                                runOnUiThread { videoAdapter.setCameraEnabled(identity, true) }
+                            }
+                        }
+                        is RoomEvent.TrackPublished -> {
+                            // Birisi yeni bir track paylaştığında otomatik abone ol
+                            val pub = event.publication as? io.livekit.android.room.track.RemoteTrackPublication
+                            pub?.setSubscribed(true)
+                        }
+                        is RoomEvent.ParticipantConnected -> {
+                            val participant = event.participant
+                            Logger.e("PARTICIPANT JOINED: ${participant.identity?.value}. Remote Count: ${newRoom.remoteParticipants.size}")
+                            showStatus("Katılımcı girdi: ${participant.identity?.value}")
+                        }
+                        is RoomEvent.TrackE2EEStateEvent -> {
+                            Logger.d("${event.participant.identity?.value} E2EE durumu: ${event.state}")
+                        }
+                        is RoomEvent.TrackUnsubscribed -> {
+                            val participant = event.participant
+                            val identity = participant.identity?.value ?: ""
+                            runOnUiThread {
+                                Logger.e("Track Unsubscribed: $identity")
+                                if (identity.isNotEmpty()) {
+                                    videoAdapter.removeTrack(identity)
+                                }
+                            }
+                        }
+                        is RoomEvent.ParticipantDisconnected -> {
+                            val participant = event.participant
+                            val identity = participant.identity?.value ?: ""
+                            Logger.e("EVENT: ParticipantDisconnected -> $identity. Kalan Remote: ${newRoom.remoteParticipants.size}")
+
+                            runOnUiThread {
+                                if (identity.isNotEmpty()) {
+                                    videoAdapter.removeTrack(identity)
+                                }
+
+                                // Sadece hiç kimse kalmadıysa odayı kapat
+                                if (newRoom.remoteParticipants.isEmpty()) {
+                                    Logger.e("Odada kimse kalmadı, ayrılıyoruz.")
+                                    leaveRoom(true)
+                                } else {
+                                    showStatus("$identity görüşmeden ayrıldı.")
+                                }
+                            }
+                        }
+                        is RoomEvent.Disconnected -> {
+                            Logger.e("EVENT: Room Disconnected (Oda bağlantısı tamamen koptu)")
+                            runOnUiThread {
+                                leaveRoom(true)
+                                showStatus("Görüşme sunucu tarafından sonlandırıldı.")
+                            }
+                        }
+                        is RoomEvent.DataReceived -> {
+                            val message = String(event.data)
+                            val participantName = event.participant?.identity?.value ?: "Biri"
+                            Logger.d("DataReceived: $message from $participantName")
+
+                            if (message == "REJECTED") {
+                                withContext(Dispatchers.Main) {
+                                    if (newRoom.remoteParticipants.isEmpty()) {
+                                        callTimeoutJob?.cancel()
+                                        leaveRoom(true)
+                                    } else {
+                                        showStatus("$participantName aramayı reddetti.")
+                                    }
+                                }
+                            } else if (message.startsWith("LEFT_CALL:")) {
+                                val whoLeft = message.substringAfter("LEFT_CALL:")
+                                Logger.e("Kullanıcı ayrılma mesajı yolladı: $whoLeft. Kalan: ${newRoom.remoteParticipants.size}")
+
+                                withContext(Dispatchers.Main) {
+                                    // Eğer mesajı atan kişi remoteParticipants listesindeyse ve
+                                    // listede başka kimse yoksa (veya sadece o varsa) hemen çıkalım.
+                                    // Bazı durumlarda ParticipantDisconnected mesajdan sonra gelir.
+                                    val remoteSize = newRoom.remoteParticipants.size
+                                    val senderSid = event.participant?.sid
+
+                                    val shouldLeave = if (remoteSize == 0) true
+                                    else if (remoteSize == 1 && senderSid != null) {
+                                        // Eğer odadaki tek kişi mesajı atan kişiyse
+                                        newRoom.remoteParticipants.values.any { it.sid == senderSid }
+                                    } else false
+
+                                    if (shouldLeave) {
+                                        Logger.e("Son katılımcı da ayrıldı (mesaj yoluyla), çıkılıyor...")
+                                        leaveRoom(true)
+                                    } else {
+                                        showStatus("$whoLeft görüşmeden ayrıldı.")
+                                    }
+                                }
+                            }
+                        }
+                        else -> {}
+                    }
+                }
+            }
+
+            // Zaten odada olan tracklar varsa (Garantili ekleme)
+            lifecycleScope.launch {
+                // İlk 15 saniye boyunca periyodik kontrol
+                repeat(8) { attempt ->
+                    delay(if (attempt == 0) 500.milliseconds else 2000.milliseconds)
+                    Logger.e("Checking for existing participants (Attempt ${attempt + 1})... Count: ${newRoom.remoteParticipants.size}")
+
+                    newRoom.remoteParticipants.values.forEach { participant ->
+                        Logger.d("Checking Participant: ${participant.identity?.value}")
+
+                        participant.trackPublications.values.forEach { pub ->
+                            if (pub is io.livekit.android.room.track.RemoteTrackPublication) {
+                                if (!pub.subscribed) {
+                                    Logger.d("Yeniden girişte abone olunuyor: ${participant.identity?.value} - ${pub.sid}")
+                                    pub.setSubscribed(true)
+                                }
+
+                                val track = pub.track as? VideoTrack
+                                if (track != null) {
+                                    runOnUiThread {
+                                        val identity = participant.identity?.value ?: "Bilinmeyen"
+                                        if (videoAdapter.addTrack(identity, track)) {
+                                            if (pub.muted) {
+                                                videoAdapter.setCameraEnabled(identity, false)
+                                            }
+                                            Logger.e("Existing Track added for: $identity")
+                                            remoteVideosRecyclerView.post {
+                                                remoteVideosRecyclerView.requestLayout()
+                                                videoAdapter.notifyDataSetChanged()
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
 
-        runOnUiThread {
-            uiContainer.visibility = View.GONE
-            findViewById<View>(R.id.bottom_navigation).visibility = View.GONE
-            callControls.visibility = View.VISIBLE
-            leaveButton.isEnabled = true
-            muteButton.isEnabled = true
+            runOnUiThread {
+                uiContainer.visibility = View.GONE
+                findViewById<View>(R.id.bottom_navigation).visibility = View.GONE
+                callControls.visibility = View.VISIBLE
+                leaveButton.isEnabled = true
+                muteButton.isEnabled = true
 
-            // Yerel videoyu kesin olarak görünür yapalım
-            if (useVideo) {
-                val localParticipant = newRoom.localParticipant
+                // Yerel videoyu kesin olarak görünür yapalım
+                if (useVideo) {
+                    val localParticipant = newRoom.localParticipant
 
-                lifecycleScope.launch(Dispatchers.Main) {
-                    var retryCount = 0
-                    var localTrack: LocalVideoTrack? = null
+                    lifecycleScope.launch(Dispatchers.Main) {
+                        var retryCount = 0
+                        var localTrack: LocalVideoTrack? = null
 
-                    while (retryCount < 20 && localTrack == null) {
-                        localTrack = localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack
-                        if (localTrack == null) {
-                            delay(200.milliseconds)
-                            retryCount++
+                        while (retryCount < 20 && localTrack == null) {
+                            localTrack = localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack
+                            if (localTrack == null) {
+                                delay(200.milliseconds)
+                                retryCount++
+                            }
                         }
-                    }
 
-                    if (localTrack != null) {
-                        // Local videoyu RecyclerView'a ekle
-                        videoAdapter.addTrack(localIdentity, localTrack)
+                        if (localTrack != null) {
+                            // Local videoyu RecyclerView'a ekle
+                            videoAdapter.addTrack(localIdentity, localTrack)
 
-                        // Kamera başlangıçta açıksa siyah overlay'i kapat
-                        videoAdapter.setCameraEnabled(localIdentity, callViewModel.isCameraOn.value)
+                            // Kamera başlangıçta açıksa siyah overlay'i kapat
+                            videoAdapter.setCameraEnabled(localIdentity, callViewModel.isCameraOn.value)
 
-                        remoteVideosRecyclerView.post {
-                            remoteVideosRecyclerView.requestLayout()
-                            videoAdapter.notifyDataSetChanged()
+                            remoteVideosRecyclerView.post {
+                                remoteVideosRecyclerView.requestLayout()
+                                videoAdapter.notifyDataSetChanged()
+                            }
+                        } else {
+                            Logger.e("Local video track bulunamadı.")
                         }
-                    } else {
-                        Logger.e("Local video track bulunamadı.")
                     }
                 }
+            }
+        } catch (e: Exception) {
+            Logger.e("connectToRoom hatası", e)
+            withContext(Dispatchers.Main) {
+                leaveRoom(true)
+                Toast.makeText(this@MainActivity, "Görüşme başlatılamadı: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -1562,7 +1668,7 @@ class MainActivity : AppCompatActivity() {
             uiContainer.visibility = View.VISIBLE
             findViewById<View>(R.id.bottom_navigation).visibility = View.VISIBLE
             switchCameraButton.isEnabled = false
-            
+
             // Tıklama dinleyicisini kaldır ki boş alana basınca geri gelmesin
             findViewById<View>(R.id.fragment_container).setOnClickListener(null)
         }
@@ -1578,7 +1684,7 @@ class MainActivity : AppCompatActivity() {
             withContext(Dispatchers.Main) {
                 CallManager.disconnect(this@MainActivity)
                 videoAdapter.clear()
-                
+
                 // Anlık durum güncellemesi: Odadan çıktığımızı sunucuya hemen bildir
                 sessionPreferences.getCurrentIdentity()?.let { id ->
                     lifecycleScope.launch { userRepository.sendHeartbeat(id) }
@@ -1732,7 +1838,7 @@ class MainActivity : AppCompatActivity() {
                         refreshContacts()
                     }
                 }
-                delay(5000.milliseconds) 
+                delay(3000.milliseconds)
             }
         }
     }
@@ -1792,7 +1898,7 @@ class MainActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: LogViewHolder, position: Int) {
             val log = getItem(position)
             holder.name.text = log.target
-            
+
             val sdf = java.text.SimpleDateFormat("dd MMM HH:mm", java.util.Locale.getDefault())
             holder.time.text = sdf.format(java.util.Date(log.timestamp))
 
@@ -1816,6 +1922,11 @@ class MainActivity : AppCompatActivity() {
                     holder.icon.setImageResource(android.R.drawable.sym_call_missed)
                     holder.icon.imageTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this@MainActivity, R.color.text_gray))
                     holder.typeText.text = "Reddedildi"
+                }
+                "BLOCKED_CALL" -> {
+                    holder.icon.setImageResource(android.R.drawable.ic_delete)
+                    holder.icon.imageTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this@MainActivity, R.color.danger_red))
+                    holder.typeText.text = "Engellendi"
                 }
             }
             holder.typeText.setTextColor(holder.icon.imageTintList!!.defaultColor)

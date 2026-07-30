@@ -1,4 +1,5 @@
-- [x] `HistoryViewModel.kt` dosyasına `clearHistory()` fonksiyonu ekle
-- [x] `activity_main.xml` dosyasına "TEMİZLE" butonu ekle
-- [x] `MainActivity.kt` içinde butonu bağla ve onay diyaloğu ekle
-- [x] Projeyi derleyerek değişiklikleri doğrula
+- [x] `UserRepository.kt`: `syncUsers` metodunda `isBlocked` durumunu koru
+- [x] `UserDao.kt`: `getBlockedUsers` metodunu `Flow` dönecek şekilde güncelle
+- [x] `MainActivity.kt`: `startAutoRefresh` süresini 3 saniyeye düşür
+- [x] `MainActivity.kt`: `loadBlockedUsers` metodunu `Flow` dinleyecek şekilde modernize et
+- [x] Projeyi derle ve doğrula

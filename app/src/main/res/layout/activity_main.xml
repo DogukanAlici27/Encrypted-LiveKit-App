@@ -555,6 +555,46 @@
                                 android:textColor="@color/text_gray"
                                 android:textSize="20sp" />
                         </LinearLayout>
+
+                        <View
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:background="#12FFFFFF" />
+
+                        <!-- Engellenenler satırı -->
+                        <LinearLayout
+                            android:id="@+id/settingsBlockedRow"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:background="?attr/selectableItemBackground"
+                            android:padding="16dp">
+
+                            <ImageView
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
+                                android:src="@android:drawable/ic_delete"
+                                app:tint="@color/danger_red" />
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:layout_marginStart="16dp"
+                                android:text="Engellenen Kişiler"
+                                android:textColor="@color/text_white"
+                                android:textSize="16sp" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="›"
+                                android:textColor="@color/text_gray"
+                                android:textSize="20sp" />
+                        </LinearLayout>
                     </LinearLayout>
 
                     <!-- ============ HESAP ALT PANELİ ============ -->
@@ -729,6 +769,49 @@
                                 android:src="@android:drawable/checkbox_off_background"
                                 app:tint="@color/accent_blue" />
                         </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- ============ ENGELLENENLER ALT PANELİ ============ -->
+                    <LinearLayout
+                        android:id="@+id/blockedSettingsPanel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <LinearLayout
+                            android:id="@+id/blockedBackRow"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:background="?attr/selectableItemBackground"
+                            android:padding="16dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="‹"
+                                android:textColor="@color/accent_blue"
+                                android:textSize="20sp"
+                                android:layout_marginEnd="12dp" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Engellenen Kişiler"
+                                android:textColor="@color/text_white"
+                                android:textSize="18sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <androidx.recyclerview.widget.RecyclerView
+                            android:id="@+id/blockedRecyclerView"
+                            android:layout_width="match_parent"
+                            android:layout_height="300dp"
+                            android:layout_marginTop="8dp" />
                     </LinearLayout>
                 </LinearLayout>
             </FrameLayout>

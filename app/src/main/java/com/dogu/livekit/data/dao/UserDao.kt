@@ -32,4 +32,10 @@ interface UserDao {
 
     @Query("UPDATE users SET isOnline = 0, currentRoom = NULL")
     suspend fun resetOnlineStatuses()
+
+    @Query("UPDATE users SET isBlocked = :isBlocked WHERE identity = :identity")
+    suspend fun updateBlockedStatus(identity: String, isBlocked: Boolean)
+
+    @Query("SELECT * FROM users WHERE isBlocked = 1")
+    fun getBlockedUsers(): Flow<List<UserEntity>>
 }

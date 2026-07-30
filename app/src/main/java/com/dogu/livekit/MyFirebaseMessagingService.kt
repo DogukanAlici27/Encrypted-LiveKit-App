@@ -19,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -48,6 +49,24 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
         Log.d("FCM", "Bildirim geldi. Arayan: $caller, Room: $room")
 
+        // 0. ENGEL KONTROLÜ
+        serviceScope.launch {
+            val user = userRepository.fetchLocalUser(caller)
+            if (user != null && user.isBlocked) {
+                Log.d("FCM", "Engellenen kullanıcı ($caller) arıyor. Sessizce reddediliyor...")
+                if (room != null) {
+                    silentDeclineCall(caller, room)
+                }
+                return@launch
+            }
+
+            withContext(Dispatchers.Main) {
+                processMessage(remoteMessage, caller, room, encryptedRoomKey)
+            }
+        }
+    }
+
+    private fun processMessage(remoteMessage: RemoteMessage, caller: String, room: String?, encryptedRoomKey: String?) {
         // 1. MEŞGULİYET KONTROLÜ
         // YENİ: Artık tamamen susmuyoruz. Zaten görüşmedeysek tam ekran arama ekranını
         // açmak yerine, arayanı bildiren sade bir bildirim gösteriyoruz.
@@ -77,6 +96,33 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
         if (room != null) {
             showCallNotification(caller, room, encryptedRoomKey)
+        }
+    }
+
+    private suspend fun silentDeclineCall(caller: String, room: String) {
+        val identity = sessionPreferences.getCurrentIdentity() ?: return
+        val result = userRepository.fetchToken(identity, "REJECTER", room)
+        if (result.isSuccess) {
+            val json = result.getOrNull()!!
+            try {
+                val rejectRoom = io.livekit.android.LiveKit.create(applicationContext)
+                rejectRoom.connect(json.getString("url"), json.getString("token"))
+                
+                var retry = 0
+                while (rejectRoom.state != io.livekit.android.room.Room.State.CONNECTED && retry < 20) {
+                    kotlinx.coroutines.delay(200)
+                    retry++
+                }
+
+                if (rejectRoom.state == io.livekit.android.room.Room.State.CONNECTED) {
+                    rejectRoom.localParticipant.publishData("REJECTED".toByteArray())
+                    kotlinx.coroutines.delay(500)
+                }
+                rejectRoom.disconnect()
+                userRepository.saveCallLog(caller, "BLOCKED_CALL")
+            } catch (e: Exception) {
+                Log.e("FCM", "Silent decline hatası: ${e.message}")
+            }
         }
     }
 

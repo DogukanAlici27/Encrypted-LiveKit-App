@@ -9,7 +9,7 @@ import com.dogu.livekit.data.dao.UserDao
 import com.dogu.livekit.data.entity.CallLogEntity
 import com.dogu.livekit.data.entity.UserEntity
 
-@Database(entities = [UserEntity::class, CallLogEntity::class], version = 2, exportSchema = false)
+@Database(entities = [UserEntity::class, CallLogEntity::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
     abstract fun callLogDao(): CallLogDao
@@ -25,8 +25,8 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "livekit_database"
                 )
-                .fallbackToDestructiveMigration()
-                .build()
+                    .fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
                 instance
             }

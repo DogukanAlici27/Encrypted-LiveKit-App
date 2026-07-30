@@ -1,21 +1,22 @@
-# Arama Geçmişini Temizleme Özelliği Eklendi
+# Engellenenler Listesi ve Senkronizasyon İyileştirmeleri
 
-Kullanıcıların arama geçmişini tek tıkla silebilmesini sağlayan özellik başarıyla entegre edildi.
+Engelleme özelliğinin veritabanı senkronizasyonu sırasında bozulması hatası giderildi ve çevrimiçi durum güncellemeleri hızlandırıldı.
 
-## Yapılan Değişiklikler
+## Yapılan İyileştirmeler
 
-### 1. Veri ve Mantık Katmanı
-- **[HistoryViewModel.kt](file:///home/dogukan/Desktop/kopya6/kopya6/app/src/main/java/com/dogu/livekit/viewmodel/HistoryViewModel.kt)** dosyasına `clearHistory()` fonksiyonu eklendi. Bu fonksiyon, yerel veritabanındaki tüm arama kayıtlarını siler.
+### 1. Kalıcı Engelleme Mekanizması
+Önceki versiyonda, sunucudan gelen her kullanıcı listesi güncellemesi yerel engelleme bilgilerini siliyordu.
+- **[UserRepository.kt](file:///home/dogukan/Desktop/kopya6/kopya6/app/src/main/java/com/dogu/livekit/data/repository/UserRepository.kt)**: `syncUsers` metodu artık sunucudan veri çekerken yerel veritabanındaki `isBlocked` (engelli) bayrağını kontrol ediyor ve koruyor. Böylece engellediğiniz bir kişi siz kaldırmadığınız sürece engelli kalmaya devam edecek.
 
-### 2. Kullanıcı Arayüzü (UI)
-- **[activity_main.xml](file:///home/dogukan/Desktop/kopya6/kopya6/app/src/main/res/layout/activity_main.xml)** dosyasına, arama geçmişi başlığının yanına kırmızı renkli bir "TEMİZLE" butonu eklendi.
-- **[MainActivity.kt](file:///home/dogukan/Desktop/kopya6/kopya6/app/src/main/java/com/dogu/livekit/ui/MainActivity.kt)** içinde bu buton bağlandı ve yanlışlıkla silmeleri önlemek için bir onay penceresi (AlertDialog) eklendi.
+### 2. Canlı Engellenenler Listesi
+- **[UserDao.kt](file:///home/dogukan/Desktop/kopya6/kopya6/app/src/main/java/com/dogu/livekit/data/dao/UserDao.kt)** & **[MainActivity.kt](file:///home/dogukan/Desktop/kopya6/kopya6/app/src/main/java/com/dogu/livekit/ui/MainActivity.kt)**: Engellenenler listesi artık statik bir yükleme yerine "canlı" (`Flow`) bir akışa dönüştürüldü. Siz birini engellediğiniz anda, eğer Ayarlar sayfasındaysanız liste saniyeler içinde kendiliğinden güncellenecek.
 
-## Nasıl Kullanılır?
-1. Uygulamanın alt menüsünden "Geçmiş" sekmesine gidin.
-2. Sağ üstte yer alan **TEMİZLE** butonuna basın.
-3. Çıkan onay penceresinde "Evet" seçeneğini seçerek tüm geçmişi temizleyebilirsiniz.
+### 3. Hızlı Durum Güncellemesi (3 Saniye)
+- **[MainActivity.kt](file:///home/dogukan/Desktop/kopya6/kopya6/app/src/main/java/com/dogu/livekit/ui/MainActivity.kt)**: Kullanıcıların çevrimiçi/çevrimdışı durumlarını kontrol eden otomatik yenileme döngüsü **5 saniyeden 3 saniyeye** indirildi. Bu sayede bir arkadaşınız uygulamayı açtığında veya kapattığında bunu çok daha hızlı fark edeceksiniz.
 
 ## Doğrulama Sonuçları
-- Proje başarıyla derlendi (`assembleDebug`).
-- Veritabanı işlemleri ve UI etkileşimleri kontrol edildi.
+- **Derleme:** Başarılı (`assembleDebug`).
+- **Veri Koruma:** Senkronizasyon sırasında engelleme durumunun korunduğu kod seviyesinde doğrulandı.
+- **Hız:** Yenileme süresindeki %40'lık iyileşme onaylandı.
+
+Artık engellediğin kişiler sen istemediğin sürece asla listene geri gelmeyecek ve tüm arkadaş listeni çok daha akıcı bir şekilde takip edebileceksin.

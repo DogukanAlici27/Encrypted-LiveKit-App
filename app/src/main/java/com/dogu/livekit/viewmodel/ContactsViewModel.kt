@@ -42,4 +42,10 @@ class ContactsViewModel @Inject constructor(
             userRepository.syncUnsyncedUsers(fcmToken)
         }
     }
+
+    fun toggleBlockUser(identity: String, isBlocked: Boolean) {
+        viewModelScope.launch {
+            userRepository.updateBlockedStatus(identity, isBlocked)
+        }
+    }
 }
