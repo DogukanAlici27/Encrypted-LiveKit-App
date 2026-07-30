@@ -49,9 +49,9 @@ object NetworkClient {
     }
 
     val httpClient = OkHttpClient.Builder()
-        .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
-        .writeTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+        .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+        .writeTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
         .build()
 
     fun createPostRequest(endpoint: String, json: JSONObject): Request {

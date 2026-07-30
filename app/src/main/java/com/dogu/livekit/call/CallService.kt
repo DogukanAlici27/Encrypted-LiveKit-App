@@ -9,14 +9,12 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import com.dogu.livekit.network.UserRepository
 import com.dogu.livekit.pref.SessionPreferences
 import kotlinx.coroutines.*
 
 class CallService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var heartbeatJob: Job? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val channelId = "call_service_channel"
@@ -40,28 +38,14 @@ class CallService : Service() {
             startForeground(2001, notification)
         }
 
-        startHeartbeat()
-
+        // Heartbeat artık WorkManager ve MainActivity tarafından yönetiliyor
         return START_NOT_STICKY
-    }
-
-    private fun startHeartbeat() {
-        heartbeatJob?.cancel()
-        val identity = SessionPreferences(this).getCurrentIdentity() ?: return
-        
-        heartbeatJob = serviceScope.launch {
-            while (isActive) {
-                UserRepository.sendHeartbeat(identity)
-                delay(10000)
-            }
-        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
         super.onDestroy()
-        heartbeatJob?.cancel()
         serviceScope.cancel()
         stopForeground(true)
     }

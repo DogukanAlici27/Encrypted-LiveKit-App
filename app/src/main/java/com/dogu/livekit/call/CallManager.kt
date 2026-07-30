@@ -27,7 +27,7 @@ object CallManager {
         url: String,
         token: String,
         useVideo: Boolean,
-        localRenderer: SurfaceViewRenderer,
+        localRenderer: SurfaceViewRenderer? = null,
         remoteRenderer: SurfaceViewRenderer? = null,
         roomOptions: RoomOptions? = null
     ): Room {
@@ -46,7 +46,7 @@ object CallManager {
         // ÖNEMLİ: Renderer ilklendirmesini ana thread'de yapmalıyız
         withContext(Dispatchers.Main) {
             try {
-                newRoom.initVideoRenderer(localRenderer)
+                localRenderer?.let { newRoom.initVideoRenderer(it) }
                 remoteRenderer?.let { newRoom.initVideoRenderer(it) }
             } catch (e: Exception) {
                 Logger.e("Renderer init hatası: ${e.message}")
@@ -73,12 +73,14 @@ object CallManager {
                     }
                 }
 
-                if (localTrack != null) {
+                if (localTrack != null && localRenderer != null) {
                     localRenderer.setScalingType(livekit.org.webrtc.RendererCommon.ScalingType.SCALE_ASPECT_FILL)
                     localRenderer.setMirror(true) // Yerel kamera görüntüsü aynalanır
                     localTrack.addRenderer(localRenderer)
                     localRenderer.visibility = android.view.View.VISIBLE
                     Logger.d("Yerel kamera track'i renderer'a başarıyla eklendi.")
+                } else if (localTrack != null) {
+                    Logger.d("Yerel kamera track'i oluşturuldu ama renderer null, manuel eklenebilir.")
                 } else {
                     Logger.e("Yerel kamera track'i oluşturulamadı! Manuel deneme...")
                 }

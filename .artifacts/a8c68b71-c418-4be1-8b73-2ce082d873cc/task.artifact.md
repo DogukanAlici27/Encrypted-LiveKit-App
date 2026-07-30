@@ -1,0 +1,18 @@
+- [/] Dependency Injection & Core Setup
+    - [ ] Add Hilt dependencies to `libs.versions.toml`
+    - [ ] Update `build.gradle.kts` files (root and app)
+    - [ ] Create `LiveKitApplication.kt`
+    - [ ] Register `LiveKitApplication` in `AndroidManifest.xml`
+    - [ ] Create `AppModule.kt` for Hilt injections
+- [ ] Data Layer Refactoring
+    - [ ] Refactor `SessionPreferences` to be injectable
+    - [ ] Refactor `UserRepository` to be injectable
+    - [ ] Create `CallRepository` for database operations
+- [ ] ViewModel Layer
+    - [ ] Create `AuthViewModel`
+    - [ ] Create `ContactsViewModel`
+    - [ ] Create `CallViewModel`
+    - [ ] Create `HistoryViewModel`
+- [ ] UI Layer Refactoring
+    - [ ] Refactor `MainActivity` to use ViewModels
+    - [ ] Refactor `IncomingCallActivity` to use ViewModels

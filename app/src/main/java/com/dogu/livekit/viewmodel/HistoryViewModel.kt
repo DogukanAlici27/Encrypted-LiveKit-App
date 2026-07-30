@@ -1,0 +1,20 @@
+package com.dogu.livekit.viewmodel
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.dogu.livekit.data.AppDatabase
+import com.dogu.livekit.data.entity.CallLogEntity
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
+import javax.inject.Inject
+
+@HiltViewModel
+class HistoryViewModel @Inject constructor(
+    private val db: AppDatabase
+) : ViewModel() {
+
+    val history: StateFlow<List<CallLogEntity>> = db.callLogDao().getAllLogs()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+}

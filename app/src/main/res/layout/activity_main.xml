@@ -25,113 +25,123 @@
 
 
         <!-- Arama Kontrolleri -->
-        <LinearLayout
+        <HorizontalScrollView
             android:id="@+id/call_controls"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|center_horizontal"
             android:layout_marginBottom="60dp"
             android:background="@drawable/bg_call_controls"
-            android:padding="8dp"
             android:elevation="20dp"
-            android:orientation="horizontal"
-            android:visibility="gone">
+            android:visibility="gone"
+            android:scrollbars="none"
+            android:overScrollMode="never"
+            android:clipToPadding="false"
+            android:clipChildren="false">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/speakerButton"
-                style="@style/Widget.MaterialComponents.Button.Icon"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:insetLeft="0dp"
-                android:insetTop="0dp"
-                android:insetRight="0dp"
-                android:insetBottom="0dp"
-                app:backgroundTint="@color/accent_blue_alpha"
-                app:icon="@drawable/ic_speaker_on"
-                app:iconSize="24dp"
-                app:iconTint="@color/white"
-                app:cornerRadius="28dp"
-                android:layout_marginEnd="12dp" />
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:orientation="horizontal">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/muteButton"
-                style="@style/Widget.MaterialComponents.Button.Icon"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:insetLeft="0dp"
-                android:insetTop="0dp"
-                android:insetRight="0dp"
-                android:insetBottom="0dp"
-                app:backgroundTint="@color/accent_blue_alpha"
-                app:icon="@drawable/ic_mic_on"
-                app:iconSize="24dp"
-                app:iconTint="@color/white"
-                app:cornerRadius="28dp"
-                android:layout_marginEnd="12dp" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/speakerButton"
+                    style="@style/Widget.MaterialComponents.Button.Icon"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:insetLeft="0dp"
+                    android:insetTop="0dp"
+                    android:insetRight="0dp"
+                    android:insetBottom="0dp"
+                    app:backgroundTint="@color/accent_blue_alpha"
+                    app:icon="@drawable/ic_speaker_on"
+                    app:iconSize="24dp"
+                    app:iconTint="@color/white"
+                    app:cornerRadius="28dp"
+                    android:layout_marginEnd="12dp" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/switchCameraButton"
-                style="@style/Widget.MaterialComponents.Button.Icon"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:insetLeft="0dp"
-                android:insetTop="0dp"
-                android:insetRight="0dp"
-                android:insetBottom="0dp"
-                app:backgroundTint="@color/accent_blue_alpha"
-                app:icon="@drawable/ic_camera_switch"
-                app:iconSize="24dp"
-                app:iconTint="@color/white"
-                app:cornerRadius="28dp"
-                android:layout_marginEnd="12dp" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/muteButton"
+                    style="@style/Widget.MaterialComponents.Button.Icon"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:insetLeft="0dp"
+                    android:insetTop="0dp"
+                    android:insetRight="0dp"
+                    android:insetBottom="0dp"
+                    app:backgroundTint="@color/accent_blue_alpha"
+                    app:icon="@drawable/ic_mic_on"
+                    app:iconSize="24dp"
+                    app:iconTint="@color/white"
+                    app:cornerRadius="28dp"
+                    android:layout_marginEnd="12dp" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/leaveButton"
-                style="@style/Widget.MaterialComponents.Button.Icon"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:insetLeft="0dp"
-                android:insetTop="0dp"
-                android:insetRight="0dp"
-                android:insetBottom="0dp"
-                app:backgroundTint="@color/danger_red"
-                app:icon="@drawable/ic_hangup"
-                app:iconSize="24dp"
-                app:iconTint="@color/white"
-                app:cornerRadius="28dp"
-                android:layout_marginEnd="12dp" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/switchCameraButton"
+                    style="@style/Widget.MaterialComponents.Button.Icon"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:insetLeft="0dp"
+                    android:insetTop="0dp"
+                    android:insetRight="0dp"
+                    android:insetBottom="0dp"
+                    app:backgroundTint="@color/accent_blue_alpha"
+                    app:icon="@drawable/ic_camera_switch"
+                    app:iconSize="24dp"
+                    app:iconTint="@color/white"
+                    app:cornerRadius="28dp"
+                    android:layout_marginEnd="12dp" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/addParticipantButton"
-                style="@style/Widget.MaterialComponents.Button.Icon"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:insetLeft="0dp"
-                android:insetTop="0dp"
-                android:insetRight="0dp"
-                android:insetBottom="0dp"
-                app:backgroundTint="@color/accent_blue_alpha"
-                app:icon="@drawable/ic_people"
-                app:iconSize="24dp"
-                app:iconTint="@color/white"
-                app:cornerRadius="28dp"
-                android:layout_marginEnd="12dp" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/leaveButton"
+                    style="@style/Widget.MaterialComponents.Button.Icon"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:insetLeft="0dp"
+                    android:insetTop="0dp"
+                    android:insetRight="0dp"
+                    android:insetBottom="0dp"
+                    app:backgroundTint="@color/danger_red"
+                    app:icon="@drawable/ic_hangup"
+                    app:iconSize="24dp"
+                    app:iconTint="@color/white"
+                    app:cornerRadius="28dp"
+                    android:layout_marginEnd="12dp" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/refreshCallButton"
-                style="@style/Widget.MaterialComponents.Button.Icon"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:insetLeft="0dp"
-                android:insetTop="0dp"
-                android:insetRight="0dp"
-                android:insetBottom="0dp"
-                app:backgroundTint="@color/accent_blue_alpha"
-                app:icon="@android:drawable/ic_menu_rotate"
-                app:iconSize="24dp"
-                app:iconTint="@color/white"
-                app:cornerRadius="28dp" />
-        </LinearLayout>
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/addParticipantButton"
+                    style="@style/Widget.MaterialComponents.Button.Icon"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:insetLeft="0dp"
+                    android:insetTop="0dp"
+                    android:insetRight="0dp"
+                    android:insetBottom="0dp"
+                    app:backgroundTint="@color/accent_blue_alpha"
+                    app:icon="@drawable/ic_people"
+                    app:iconSize="24dp"
+                    app:iconTint="@color/white"
+                    app:cornerRadius="28dp"
+                    android:layout_marginEnd="12dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/cameraToggleButton"
+                    style="@style/Widget.MaterialComponents.Button.Icon"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:insetLeft="0dp"
+                    android:insetTop="0dp"
+                    android:insetRight="0dp"
+                    android:insetBottom="0dp"
+                    app:backgroundTint="@color/accent_blue_alpha"
+                    app:icon="@drawable/ic_videocam_on"
+                    app:iconSize="24dp"
+                    app:iconTint="@color/white"
+                    app:cornerRadius="28dp" />
+
+            </LinearLayout>
+        </HorizontalScrollView>
 
         <LinearLayout
             android:id="@+id/ui_container"
@@ -172,6 +182,22 @@
                         android:background="@color/accent_blue"
                         android:layout_marginTop="2dp" />
                 </LinearLayout>
+
+                <TextView
+                    android:id="@+id/connectionStatusBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentEnd="true"
+                    android:layout_centerVertical="true"
+                    android:background="@drawable/bg_status_badge"
+                    android:backgroundTint="@color/success_green"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="4dp"
+                    android:text="ÇEVRİMİÇİ"
+                    android:textColor="@color/white"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
 
             </RelativeLayout>
 
@@ -272,7 +298,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="REHBERİM"
+                            android:text="KULLANICILAR"
                             android:textColor="@color/text_gray"
                             android:textSize="12sp"
                             android:fontFamily="sans-serif-medium"
@@ -326,6 +352,30 @@
                             android:layout_height="wrap_content"
                             android:orientation="vertical" />
                     </androidx.core.widget.NestedScrollView>
+                </LinearLayout>
+
+                <!-- Geçmiş Paneli -->
+                <LinearLayout
+                    android:id="@+id/history_panel"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="ARAMA GEÇMİŞİ"
+                        android:textColor="@color/text_gray"
+                        android:textSize="12sp"
+                        android:fontFamily="sans-serif-medium"
+                        android:letterSpacing="0.1"
+                        android:layout_marginBottom="16dp" />
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/historyRecyclerView"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
                 </LinearLayout>
 
                 <!-- Ayarlar Paneli (eski adıyla Profil) -->
@@ -542,6 +592,25 @@
                             android:layout_marginHorizontal="16dp"
                             android:text="OTURUMU KAPAT"
                             android:textColor="@color/danger_red" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/changePasswordButton"
+                            style="@style/Widget.MaterialComponents.Button.TextButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginHorizontal="16dp"
+                            android:text="ŞİFRE DEĞİŞTİR"
+                            android:textColor="@color/accent_blue" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/deleteAccountButton"
+                            style="@style/Widget.MaterialComponents.Button.TextButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginHorizontal="16dp"
+                            android:text="HESABI SİL"
+                            android:textColor="@color/danger_red"
+                            android:alpha="0.6" />
                     </LinearLayout>
 
                     <!-- ============ TEMA ALT PANELİ ============ -->
@@ -596,7 +665,7 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="Koyu Tema (Şu anki)"
+                                android:text="Koyu Tema (şu anki)"
                                 android:textColor="@color/text_white"
                                 android:textSize="16sp" />
 
@@ -667,7 +736,7 @@
             android:background="@drawable/bg_status_badge"
             android:paddingHorizontal="20dp"
             android:paddingVertical="10dp"
-            android:textColor="@color/text_white"
+            android:textColor="@color/white"
             android:textSize="14sp"
             android:elevation="25dp"
             android:alpha="0"

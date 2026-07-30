@@ -13,7 +13,26 @@ import com.dogu.livekit.ui.IncomingCallActivity
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
+import com.dogu.livekit.data.repository.UserRepository
+import com.dogu.livekit.pref.SessionPreferences
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+
+@AndroidEntryPoint
 class MyFirebaseMessagingService : FirebaseMessagingService() {
+
+    @Inject
+    lateinit var userRepository: UserRepository
+
+    @Inject
+    lateinit var sessionPreferences: SessionPreferences
+
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     companion object {
         const val CALL_NOTIFICATION_ID = 1001
@@ -34,14 +53,16 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         // açmak yerine, arayanı bildiren sade bir bildirim gösteriyoruz.
         if (CallManager.isBusy()) {
             Log.d("FCM", "Meşgulüz, tam ekran yerine basit 'kaçan arama' bildirimi gösterilecek.")
+            serviceScope.launch {
+                userRepository.saveCallLog(caller, "MISSED")
+            }
             showMissedCallNotification(caller)
             return
         }
 
         // 2. KENDİ ARAMAMIZI GÖRMEMEK İÇİN GÜÇLENDİRİLMİŞ KONTROL
-        val prefs = getSharedPreferences("LiveKit", MODE_PRIVATE)
-        val currentIdentity = prefs.getString("current_identity", "")?.trim() ?: ""
-        val rememberedIdentity = prefs.getString("remembered_identity", "")?.trim() ?: ""
+        val currentIdentity = sessionPreferences.getCurrentIdentity()?.trim() ?: ""
+        val rememberedIdentity = sessionPreferences.getRememberedIdentity()?.trim() ?: ""
 
         Log.d("FCM", "Kimlik Kontrolü - Current: '$currentIdentity', Remembered: '$rememberedIdentity', Incoming Caller: '$caller'")
 

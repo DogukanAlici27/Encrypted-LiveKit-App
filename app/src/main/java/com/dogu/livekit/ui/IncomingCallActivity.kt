@@ -11,13 +11,23 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.dogu.livekit.R
-import com.dogu.livekit.network.UserRepository
+import com.dogu.livekit.data.repository.UserRepository
 import com.dogu.livekit.pref.SessionPreferences
 import com.dogu.livekit.util.ImageUtils
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.launch
 
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+
+@AndroidEntryPoint
 class IncomingCallActivity : AppCompatActivity() {
+
+    @Inject
+    lateinit var userRepository: com.dogu.livekit.data.repository.UserRepository
+
+    @Inject
+    lateinit var sessionPreferences: SessionPreferences
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,7 +71,7 @@ class IncomingCallActivity : AppCompatActivity() {
 
         // Fotoğrafı sunucudan çekelim
         lifecycleScope.launch {
-            val result = UserRepository.fetchUsers()
+            val result = userRepository.fetchUsers()
             if (result.isSuccess) {
                 val users = result.getOrNull()
                 if (users != null) {
@@ -100,14 +110,16 @@ class IncomingCallActivity : AppCompatActivity() {
         nm.cancel(com.dogu.livekit.MyFirebaseMessagingService.CALL_NOTIFICATION_ID)
 
         lifecycleScope.launch {
-            val sessionPrefs = SessionPreferences(this@IncomingCallActivity)
-            val identity = sessionPrefs.getCurrentIdentity() ?: "Alıcı"
+            // Arama kaydını kaydet
+            userRepository.saveCallLog(caller, "INCOMING")
+
+            val identity = sessionPreferences.getCurrentIdentity() ?: "Alıcı"
 
             // ÖNEMLİ: target'ı KASITLI olarak null gönderiyoruz. "room" parametresi zaten
             // hangi odaya gireceğimizi belirliyor; target'a caller'ı yazarsak sunucu bunu
             // "yeni bir arama başlatılıyor" sanıp arayan kişiye de (kendi aramasını kabul
             // ettiği halde) fazladan bir bildirim gönderiyordu. Bu satır o hatayı çözüyor.
-            val result = UserRepository.fetchToken(identity, null, room)
+            val result = userRepository.fetchToken(identity, null, room)
 
             if (result.isSuccess) {
                 val json = result.getOrNull()!!
@@ -155,12 +167,16 @@ class IncomingCallActivity : AppCompatActivity() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.cancel(com.dogu.livekit.MyFirebaseMessagingService.CALL_NOTIFICATION_ID)
 
+        val caller = intent.getStringExtra("incoming_caller") ?: "Bilinmeyen"
+
         lifecycleScope.launch {
-            val sessionPrefs = SessionPreferences(this@IncomingCallActivity)
-            val identity = sessionPrefs.getCurrentIdentity() ?: "Alıcı"
+            // Reddedildi olarak kaydet
+            userRepository.saveCallLog(caller, "REJECTED")
+
+            val identity = sessionPreferences.getCurrentIdentity() ?: "Alıcı"
 
             // Reddetme sinyalini göndermek için odaya bağlanıyoruz
-            val result = UserRepository.fetchToken(identity, "REJECTER", room)
+            val result = userRepository.fetchToken(identity, "REJECTER", room)
             if (result.isSuccess) {
                 val json = result.getOrNull()!!
                 val rejectRoom = io.livekit.android.LiveKit.create(applicationContext)

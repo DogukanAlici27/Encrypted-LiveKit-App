@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
-        android:id="@+id/nav_home"
-        android:title="Giriş"
-        android:icon="@drawable/ic_home" />
-    <item
         android:id="@+id/nav_contacts"
         android:title="Rehber"
         android:icon="@drawable/ic_people" />
+    <item
+        android:id="@+id/nav_history"
+        android:title="Geçmiş"
+        android:icon="@android:drawable/ic_menu_recent_history" />
     <item
         android:id="@+id/nav_profile"
         android:title="Ayarlar"

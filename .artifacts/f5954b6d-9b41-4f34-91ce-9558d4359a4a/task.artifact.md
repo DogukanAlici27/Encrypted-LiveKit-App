@@ -1,0 +1,3 @@
+- [x] `MainActivity.kt`: `addUserButton` içindeki `isInCall` mantığını güncelle (Online ise görüşmede sayılsın)
+- [x] `MainActivity.kt`: `leaveRoom` içinde görüşmeden ayrılınca anlık heartbeat gönder
+- [x] Değişiklikleri doğrula ve derle
