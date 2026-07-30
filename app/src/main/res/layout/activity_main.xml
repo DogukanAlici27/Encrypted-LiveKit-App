@@ -362,15 +362,35 @@
                     android:orientation="vertical"
                     android:visibility="gone">
 
-                    <TextView
+                    <RelativeLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="ARAMA GEÇMİŞİ"
-                        android:textColor="@color/text_gray"
-                        android:textSize="12sp"
-                        android:fontFamily="sans-serif-medium"
-                        android:letterSpacing="0.1"
-                        android:layout_marginBottom="16dp" />
+                        android:layout_marginBottom="16dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_centerVertical="true"
+                            android:text="ARAMA GEÇMİŞİ"
+                            android:textColor="@color/text_gray"
+                            android:textSize="12sp"
+                            android:fontFamily="sans-serif-medium"
+                            android:letterSpacing="0.1" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/clearHistoryBtn"
+                            style="@style/Widget.MaterialComponents.Button.TextButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_alignParentEnd="true"
+                            android:text="TEMİZLE"
+                            android:textColor="@color/danger_red"
+                            android:textSize="10sp"
+                            android:padding="0dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            app:rippleColor="@color/danger_red" />
+                    </RelativeLayout>
 
                     <androidx.recyclerview.widget.RecyclerView
                         android:id="@+id/historyRecyclerView"

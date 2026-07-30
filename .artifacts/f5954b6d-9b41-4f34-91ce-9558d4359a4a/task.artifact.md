@@ -1,3 +1,4 @@
-- [x] `MainActivity.kt`: `addUserButton` içindeki `isInCall` mantığını güncelle (Online ise görüşmede sayılsın)
-- [x] `MainActivity.kt`: `leaveRoom` içinde görüşmeden ayrılınca anlık heartbeat gönder
-- [x] Değişiklikleri doğrula ve derle
+- [x] `HistoryViewModel.kt` dosyasına `clearHistory()` fonksiyonu ekle
+- [x] `activity_main.xml` dosyasına "TEMİZLE" butonu ekle
+- [x] `MainActivity.kt` içinde butonu bağla ve onay diyaloğu ekle
+- [x] Projeyi derleyerek değişiklikleri doğrula

@@ -8,6 +8,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -17,4 +18,10 @@ class HistoryViewModel @Inject constructor(
 
     val history: StateFlow<List<CallLogEntity>> = db.callLogDao().getAllLogs()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun clearHistory() {
+        viewModelScope.launch {
+            db.callLogDao().deleteAll()
+        }
+    }
 }

@@ -1,25 +1,21 @@
-# Görüşme Durumu (Hayalet Status) İyileştirmeleri Yapıldı
+# Arama Geçmişini Temizleme Özelliği Eklendi
 
-Kullanıcıların görüşmede olmamasına rağmen "Görüşmede" görünmesi sorunu iki aşamalı bir iyileştirme ile giderildi.
+Kullanıcıların arama geçmişini tek tıkla silebilmesini sağlayan özellik başarıyla entegre edildi.
 
 ## Yapılan Değişiklikler
 
-### 1. Daha Sıkı Durum Kontrolü (UI)
-Rehber listesinde bir kullanıcının "Görüşmede" görünmesi için artık iki şartın da sağlanması gerekiyor:
-- Kullanıcının **Çevrimiçi** olması.
-- Kullanıcının bir **Odaya bağlı** olması.
-> [!NOTE]
-> Bu sayede, kullanıcının interneti koptuğunda veya sunucuda eski bir oda kaydı kaldığında, kullanıcı "Meşgul" yerine "Çevrimdışı" olarak doğru bir şekilde gösterilecek.
+### 1. Veri ve Mantık Katmanı
+- **[HistoryViewModel.kt](file:///home/dogukan/Desktop/kopya6/kopya6/app/src/main/java/com/dogu/livekit/viewmodel/HistoryViewModel.kt)** dosyasına `clearHistory()` fonksiyonu eklendi. Bu fonksiyon, yerel veritabanındaki tüm arama kayıtlarını siler.
 
-### 2. Anlık Çıkış Bildirimi
-Görüşmeden ayrıldığınızda (`leaveRoom` tetiklendiğinde):
-- Uygulama artık 2 saniyelik heartbeat döngüsünü beklemiyor.
-- Ayrılma işlemi tamamlanır tamamlanmaz sunucuya anlık bir sinyal (heartbeat) göndererek oda bilgisini temizliyor.
-- Bu, diğer kullanıcıların sizin boşa çıktığınızı anında görmesini sağlıyor.
+### 2. Kullanıcı Arayüzü (UI)
+- **[activity_main.xml](file:///home/dogukan/Desktop/kopya6/kopya6/app/src/main/res/layout/activity_main.xml)** dosyasına, arama geçmişi başlığının yanına kırmızı renkli bir "TEMİZLE" butonu eklendi.
+- **[MainActivity.kt](file:///home/dogukan/Desktop/kopya6/kopya6/app/src/main/java/com/dogu/livekit/ui/MainActivity.kt)** içinde bu buton bağlandı ve yanlışlıkla silmeleri önlemek için bir onay penceresi (AlertDialog) eklendi.
+
+## Nasıl Kullanılır?
+1. Uygulamanın alt menüsünden "Geçmiş" sekmesine gidin.
+2. Sağ üstte yer alan **TEMİZLE** butonuna basın.
+3. Çıkan onay penceresinde "Evet" seçeneğini seçerek tüm geçmişi temizleyebilirsiniz.
 
 ## Doğrulama Sonuçları
-
-- **Derleme:** Başarılı (`assembleDebug`).
-- **Mantık Akışı:** `addUserButton` içindeki `isInCall` kontrolü ve `leaveRoom` içindeki anlık heartbeat çağrısı doğrulandı.
-
-Artık görüşmeden çıktığında veya bağlantın koptuğunda, durumunun rehberde çok daha tutarlı güncellendiğini göreceksin.
+- Proje başarıyla derlendi (`assembleDebug`).
+- Veritabanı işlemleri ve UI etkileşimleri kontrol edildi.

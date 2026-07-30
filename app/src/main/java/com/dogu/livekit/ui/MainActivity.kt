@@ -94,6 +94,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var historyPanel: View
     private lateinit var historyRecyclerView: androidx.recyclerview.widget.RecyclerView
+    private lateinit var clearHistoryBtn: MaterialButton
     private val historyAdapter = CallLogAdapter()
 
     private lateinit var settingsMenuPanel: View
@@ -403,9 +404,22 @@ class MainActivity : AppCompatActivity() {
 
         historyPanel = findViewById(R.id.history_panel)
         historyRecyclerView = findViewById(R.id.historyRecyclerView)
+        clearHistoryBtn = findViewById(R.id.clearHistoryBtn)
+
         historyRecyclerView.apply {
             layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this@MainActivity)
             adapter = historyAdapter
+        }
+
+        clearHistoryBtn.setOnClickListener {
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Geçmişi Temizle")
+                .setMessage("Tüm arama geçmişini silmek istediğinize emin misiniz?")
+                .setPositiveButton("Evet") { _, _ ->
+                    historyViewModel.clearHistory()
+                }
+                .setNegativeButton("Hayır", null)
+                .show()
         }
 
         remoteVideosRecyclerView = findViewById(R.id.remoteVideosRecyclerView)

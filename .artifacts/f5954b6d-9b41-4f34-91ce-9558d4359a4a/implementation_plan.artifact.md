@@ -1,33 +1,35 @@
-# "Hayalet" Görüşme Durumunu Düzeltme Planı
+# Arama Geçmişini Temizleme Özelliği Planı
 
-Bu plan, görüşmede olmayan kullanıcıların "Görüşmede" (Meşgul) olarak görünmesi sorununu (ghost status) çözmeyi hedefler.
-
-## Sorun Analizi
-- **UI Mantığı**: Şu anki kodda bir kullanıcının "Görüşmede" görünmesi için sadece `currentRoom` bilgisinin dolu olması yeterli. Kullanıcı çevrimdışı olsa bile eğer sunucuda eski bir oda bilgisi kalmışsa "Görüşmede" görünüyor.
-- **Arka Plan Kısıtlaması**: Uygulama arka plana alındığında `MainActivity` heartbeat (sinyal) göndermeyi durduruyor. Eğer kullanıcı o sırada bir görüşmedeyse, sunucu kullanıcının hala görüşmede olduğunu "online" süresi bitene kadar sanmaya devam ediyor.
-- **Anlık Temizlik**: Görüşmeden ayrılındığında sunucuya hemen boş bir oda bilgisi gönderilmiyor, bir sonraki heartbeat döngüsü (2 saniye) bekleniyor.
+Bu plan, kullanıcıların arama geçmişini tek tıkla temizleyebilmesi için gerekli UI ve mantıksal değişiklikleri içerir.
 
 ## Proposed Changes
 
-### 1. UI Düzenlemesi (Quick Fix)
+### 1. Veri Katmanı (DAO)
+
+#### [MODIFY] [CallLogDao.kt](file:///home/dogukan/Desktop/kopya6/kopya6/app/src/main/java/com/dogu/livekit/data/dao/CallLogDao.kt)
+- `deleteAll()` metodu zaten mevcut.
+
+---
+
+### 2. ViewModel Katmanı
+
+#### [MODIFY] [HistoryViewModel.kt](file:///home/dogukan/Desktop/kopya6/kopya6/app/src/main/java/com/dogu/livekit/viewmodel/HistoryViewModel.kt)
+- `clearHistory()` fonksiyonu eklenecek. Bu fonksiyon `viewModelScope` içinde `db.callLogDao().deleteAll()` çağrısını yapacak.
+
+---
+
+### 3. Arayüz (UI) Katmanı
+
+#### [MODIFY] [activity_main.xml](file:///home/dogukan/Desktop/kopya6/kopya6/app/src/main/res/layout/activity_main.xml)
+- `history_panel` içine "TEMİZLE" butonu eklenecek.
 
 #### [MODIFY] [MainActivity.kt](file:///home/dogukan/Desktop/kopya6/kopya6/app/src/main/java/com/dogu/livekit/ui/MainActivity.kt)
-- `addUserButton` metodunda `isInCall` kontrolü güncellenecek: Sadece kullanıcı `isOnline` İSE ve `currentRoom` doluysa "Görüşmede" görünecek.
-
-### 2. Kesintisiz Sinyal (Heartbeat) Mekanizması
-
-#### [MODIFY] [CallService.kt](file:///home/dogukan/Desktop/kopya6/kopya6/app/src/main/java/com/dogu/livekit/call/CallService.kt)
-- `CallService`'e `@AndroidEntryPoint` eklenecek.
-- Servis çalıştığı sürece (görüşme devam ederken) arka planda periyodik olarak heartbeat gönderecek. Bu sayede uygulama arka planda olsa bile kullanıcının görüşme durumu güncel kalacak.
-
-### 3. Anlık Durum Güncelleme
-
-#### [MODIFY] [MainActivity.kt](file:///home/dogukan/Desktop/kopya6/kopya6/app/src/main/java/com/dogu/livekit/ui/MainActivity.kt)
-- `leaveRoom` metodu içinde, `CallManager.disconnect()` yapıldıktan hemen sonra sunucuya boş oda bilgisi içeren bir heartbeat gönderilecek.
+- `clearHistoryBtn` butonu tanımlanacak ve tıklandığında onay penceresi gösterip `historyViewModel.clearHistory()` çağrılacak.
 
 ## Verification Plan
 
 ### Manual Verification
-1. Bir görüşmeye girin ve çıkın. Rehberde durumunuzun anında "Çevrimiçi"ye döndüğünü (kırmızıdan yeşile) doğrulayın.
-2. Görüşme sırasında uygulamayı arka plana atın. Diğer kullanıcıların sizi hala "Görüşmede" (Kırmızı) görmeye devam ettiğini doğrulayın (CallService sayesinde).
-3. Uygulamayı tamamen kapatın (Kill). Sunucu zaman aşımına uğradığında durumun "Çevrimdışı"ya (Gri) döndüğünü doğrulayın.
+- Arama geçmişi sekmesine gidilecek.
+- "TEMİZLE" butonuna basılacak.
+- Onay penceresinde "Evet" denilecek.
+- Listenin anında boşaldığı doğrulanacak.
