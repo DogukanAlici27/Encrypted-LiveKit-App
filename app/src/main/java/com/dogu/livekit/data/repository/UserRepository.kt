@@ -45,8 +45,9 @@ class UserRepository @Inject constructor(
                 publicKey = user.optString("publicKey", ""),
                 needsSync = false,
                 // /users endpoint'i isBlocked dönüyor; onu koru, yoksa mevcutu koru
-                isBlocked = if (user.has("isBlocked")) user.optBoolean("isBlocked", false)
-                else existing?.isBlocked ?: false
+                // Yerel engelleme durumunu her zaman koru. Sunucu listesinde 'isBlocked' alanı 
+                // genellikle gelmez veya false gelir; yereldeki kararı ezmemeli.
+                isBlocked = (existing?.isBlocked ?: false) || user.optBoolean("isBlocked", false)
             ))
         }
         if (entities.isNotEmpty()) db.userDao().insertUsers(entities)

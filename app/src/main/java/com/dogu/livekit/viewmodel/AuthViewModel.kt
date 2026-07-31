@@ -44,7 +44,7 @@ class AuthViewModel @Inject constructor(
                     if (mode == "register") {
                         // For simplicity, checking if user exists locally
                         val existingLocal = userRepository.fetchLocalUser(identity)
-                        
+
                         if (existingLocal != null) {
                             _authState.value = AuthState.Error("Bu isim zaten bu telefonda kayıtlı!")
                             return@launch
