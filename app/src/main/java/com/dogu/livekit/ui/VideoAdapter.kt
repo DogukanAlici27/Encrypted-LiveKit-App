@@ -106,28 +106,18 @@ class VideoAdapter : RecyclerView.Adapter<VideoAdapter.VideoViewHolder>() {
         // VIDEO KUTUSUNUN YÜKSEKLİĞİNİ AYARLA
         // ---------------------------------------------------------
 
-        val totalHeight =
-            hostRecyclerView?.height ?: 0
+        val recyclerView = hostRecyclerView
+        if (recyclerView != null && recyclerView.height > 0) {
+            val totalHeight = recyclerView.height
+            val rows = getRowCount(videoTracks.size)
+            
+            // Kenar boşluklarını kaldırdığımız için artık margin hesabı yapmıyoruz
+            val rowHeight = (totalHeight / rows)
 
-        if (totalHeight > 0) {
-
-            val rows =
-                getRowCount(videoTracks.size)
-
-            val rowHeight =
-                totalHeight / rows
-
-            val lp =
-                holder.itemView.layoutParams
-
-            if (lp != null &&
-                lp.height != rowHeight
-            ) {
-
+            val lp = holder.itemView.layoutParams
+            if (lp != null && lp.height != rowHeight) {
                 lp.height = rowHeight
-
-                holder.itemView.layoutParams =
-                    lp
+                holder.itemView.layoutParams = lp
             }
         }
 

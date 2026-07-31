@@ -188,12 +188,13 @@ class UserRepository @Inject constructor(
         } catch (e: Exception) { Result.failure(e) }
     }
 
-    suspend fun fetchToken(identity: String, target: String?, manualRoom: String?, encryptedKeysJson: String? = null): Result<JSONObject> = withContext(Dispatchers.IO) {
+    suspend fun fetchToken(identity: String, target: String?, manualRoom: String?, encryptedKeysJson: String? = null, isVideo: Boolean = true): Result<JSONObject> = withContext(Dispatchers.IO) {
         try {
             var url = "${NetworkClient.TOKEN_SERVER_URL}/token?identity=$identity"
             if (target != null) url += "&target=$target"
             if (manualRoom != null) url += "&room=$manualRoom"
             if (encryptedKeysJson != null) url += "&keys=${java.net.URLEncoder.encode(encryptedKeysJson, "UTF-8")}"
+            url += "&video=$isVideo"
             val request = NetworkClient.createGetRequest(url)
             httpClient.newCall(request).execute().use { response ->
                 if (response.isSuccessful) Result.success(JSONObject(response.body?.string() ?: "{}"))

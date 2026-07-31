@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.TextView
@@ -28,6 +29,8 @@ class IncomingCallActivity : AppCompatActivity() {
 
     @Inject
     lateinit var sessionPreferences: SessionPreferences
+
+    private var isVideo: Boolean = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,6 +65,13 @@ class IncomingCallActivity : AppCompatActivity() {
         // Henüz çözülmedi — sadece kabul edersek Keystore'daki özel anahtarımızla çözeceğiz.
         val encryptedRoomKey = intent.getStringExtra("incoming_room_key")
 
+        // Oda isminden türü garantiye alalım (Sunucu video parametresini yollamıyorsa)
+        isVideo = if (room.startsWith("AUDIO_")) false 
+                  else if (room.startsWith("VIDEO_")) true 
+                  else intent.getBooleanExtra("is_video", true)
+        
+        android.util.Log.e("INCOMING_DEBUG", "Arama Ekranı Açıldı - Room: $room, isVideo: $isVideo")
+
         val callerNames = caller.split(",")
         if (callerNames.size > 1) {
             findViewById<TextView>(R.id.callTypeLabel).text = "GRUP ARAMASI"
@@ -69,10 +79,14 @@ class IncomingCallActivity : AppCompatActivity() {
 
             // Diğer katılımcıları daha net gösteren bir metin
             val others = callerNames.joinToString(", ")
-            findViewById<TextView>(R.id.callStatusText).text = "Katılımcılar: $others"
+            findViewById<TextView>(R.id.callStatusText).apply {
+                text = "Katılımcılar: $others"
+                visibility = View.VISIBLE
+            }
         } else {
-            findViewById<TextView>(R.id.callTypeLabel).text = "GELEN ARAMA"
+            findViewById<TextView>(R.id.callTypeLabel).text = if (isVideo) "GELEN GÖRÜNTÜLÜ ARAMA" else "GELEN SESLİ ARAMA"
             findViewById<TextView>(R.id.callerNameText).text = caller
+            findViewById<TextView>(R.id.callStatusText).visibility = View.GONE
         }
 
         // Fotoğrafı sunucudan çekelim
@@ -89,9 +103,14 @@ class IncomingCallActivity : AppCompatActivity() {
                                 val bitmap = ImageUtils.base64ToBitmap(photoBase64)
                                 if (bitmap != null) {
                                     val avatarImg = findViewById<ImageView>(R.id.callerAvatar)
+                                    val blurredBg = findViewById<ImageView>(R.id.blurredBackground)
+                                    
                                     avatarImg.setImageBitmap(bitmap)
                                     avatarImg.setPadding(0, 0, 0, 0)
                                     avatarImg.imageTintList = null
+
+                                    // Arka plana bulanıklaştırma efekti (Düşük çözünürlüklü scale ile simüle ediyoruz)
+                                    blurredBg.setImageBitmap(bitmap)
                                 }
                             }
                             break
@@ -101,6 +120,9 @@ class IncomingCallActivity : AppCompatActivity() {
             }
         }
 
+        // Animasyonları başlat
+        startAnimations()
+
         findViewById<MaterialButton>(R.id.acceptButton).setOnClickListener {
             acceptCall(caller, room, encryptedRoomKey)
         }
@@ -108,6 +130,16 @@ class IncomingCallActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.declineButton).setOnClickListener {
             declineCall(room)
         }
+    }
+
+    private fun startAnimations() {
+        val pulse = android.view.animation.AnimationUtils.loadAnimation(this, R.anim.pulse_animation)
+        findViewById<View>(R.id.acceptButton).startAnimation(pulse)
+        
+        val ring = findViewById<View>(R.id.avatarRing)
+        ring.alpha = 0.3f
+        val ringPulse = android.view.animation.AnimationUtils.loadAnimation(this, R.anim.pulse_animation)
+        ring.startAnimation(ringPulse)
     }
 
     private fun acceptCall(caller: String, room: String, encryptedRoomKey: String?) {
@@ -156,6 +188,7 @@ class IncomingCallActivity : AppCompatActivity() {
                     putExtra("url", json.getString("url"))
                     putExtra("token", json.getString("token"))
                     putExtra("start_call", true)
+                    putExtra("is_video", isVideo)
                     // Not: bu, sadece cihaz içi bir Intent - çözülmüş anahtar ağa hiç çıkmıyor.
                     putExtra("room_key", decryptedRoomKey)
                     flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP

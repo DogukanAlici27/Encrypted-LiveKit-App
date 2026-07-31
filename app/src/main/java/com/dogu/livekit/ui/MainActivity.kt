@@ -384,6 +384,7 @@ class MainActivity : AppCompatActivity() {
             // YENİ: IncomingCallActivity zaten şifreyi çözüp buraya düz metin olarak
             // yolluyor (bu, sadece cihaz içi bir Intent — hiç ağdan geçmiyor).
             val roomKey = intent.getStringExtra("room_key")
+            val isVideo = intent.getBooleanExtra("is_video", true)
 
             // ÖNEMLİ BUG FIX: Intent içindeki "arama başlat" bayrağını temizliyoruz.
             // Yoksa tema değişikliği gibi Activity'nin yeniden oluşturulduğu (recreate)
@@ -392,7 +393,7 @@ class MainActivity : AppCompatActivity() {
 
             if (url != null && token != null) {
                 lifecycleScope.launch {
-                    connectToRoom(url, token, true, roomKey)
+                    connectToRoom(url, token, isVideo, roomKey)
                 }
             }
         }
@@ -908,10 +909,11 @@ class MainActivity : AppCompatActivity() {
             updateGroupCallFab()
         }
 
-        val canCall = isOnline && !isInCall && !isAppOffline
+        // Çevrimdışı olsa bile arayabilmeliyiz
+        val canCall = !isInCall && !isAppOffline
         callBtn.text = when {
             isInCall -> "MEŞGUL"
-            !isOnline || isAppOffline -> "PASİF"
+            isAppOffline -> "PASİF"
             else -> "ARA"
         }
         callBtn.setIconResource(android.R.drawable.ic_menu_call)
@@ -1056,7 +1058,8 @@ class MainActivity : AppCompatActivity() {
         }
         statusTv.setTextColor(statusDot.backgroundTintList!!.defaultColor)
 
-        val isInviteable = isOnline && !isInCall
+        // Davet ederken de çevrimdışı kısıtlamasını kaldırıyoruz
+        val isInviteable = !isInCall
         callBtn.text = if (isInCall) "MEŞGUL" else "DAVET ET"
         callBtn.isEnabled = isInviteable
         callBtn.alpha = if (isInviteable) 1f else 0.5f
@@ -1088,7 +1091,7 @@ class MainActivity : AppCompatActivity() {
                 "{}" // görüşme E2EE'siz başladıysa şifrelenecek bir şey yok
             }
 
-            val result = userRepository.fetchToken(myIdentity, targetIdentity, currentRoomName, encryptedKeysJson)
+            val result = userRepository.fetchToken(myIdentity, targetIdentity, currentRoomName, encryptedKeysJson, isVideo = callViewModel.isCameraOn.value)
             if (result.isSuccess) {
                 showStatus("$targetIdentity davet edildi, bekleniyor...")
             } else {
@@ -1269,7 +1272,13 @@ class MainActivity : AppCompatActivity() {
                 val roomKey = EncryptionManager.generateRoomKey()
                 val encryptedKeysJson = buildEncryptedKeysForTargets(target, roomKey)
 
-                val result = userRepository.fetchToken(identity, target, null, encryptedKeysJson)
+                // Oda ismini kendimiz belirleyip başına etiket koyuyoruz (Sunucuyu güncellememek için)
+                val baseRoomName = (listOf(identity) + target.split(",").map { it.trim() })
+                    .sorted()
+                    .joinToString("_")
+                val prefixedRoomName = if (useVideo) "VIDEO_ROOM_$baseRoomName" else "AUDIO_ROOM_$baseRoomName"
+
+                val result = userRepository.fetchToken(identity, target, prefixedRoomName, encryptedKeysJson, isVideo = useVideo)
                 if (result.isSuccess) {
                     val json = result.getOrNull()!!
 
@@ -1300,36 +1309,35 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // YENİ: Verilen virgüllü hedef listesi için, oda anahtarını her birinin KENDİ
-    // genel anahtarıyla ayrı ayrı şifreleyip { "identity": "şifreliMetin" } JSON'u üretir.
-    // Genel anahtarı henüz kayıtlı olmayan (örn. hiç login olmamış) hedefler atlanır —
-    // o kişi için o an E2EE kurulamaz, aramaya yine de devam edilir.
+    // YENİ: Hedef kişilerin anahtarlarını artık sunucudan değil, kendi telefonumuzdaki
+    // yerel veritabanından (Room) çekiyoruz. Bu sayede karşı taraf o an sunucuda
+    // çevrimdışı (offline) görünse bile, bizdeki kayıtlı anahtarıyla onu arayabiliyoruz.
     private suspend fun buildEncryptedKeysForTargets(targetCsv: String, roomKey: String): String =
-        withContext(Dispatchers.Default) {
+        withContext(Dispatchers.IO) {
             val targets = targetCsv.split(",").map { it.trim() }.toSet()
             val obj = JSONObject()
 
-            val usersResult = userRepository.fetchUsers()
-            if (usersResult.isSuccess) {
-                val usersArray = usersResult.getOrNull()!!
-                for (i in 0 until usersArray.length()) {
-                    val user = usersArray.getJSONObject(i)
-                    val uid = user.getString("identity")
-                    if (uid !in targets) continue
-
-                    val pubKey = user.optString("publicKey", "")
-                    // GEÇİCİ TEŞHİS LOGU: hedefin genel anahtarı gerçekten var mı?
-                    Logger.d("E2EE_DEBUG: hedef=$uid, publicKey uzunluğu=${pubKey.length}")
-                    if (pubKey.isEmpty()) continue // hedefin genel anahtarı yoksa şifreleyemeyiz
-
-                    val encrypted = KeyManager.encryptForPublicKey(pubKey, roomKey.toByteArray(Charsets.UTF_8))
-                    obj.put(uid, encrypted)
-                    Logger.d("E2EE_DEBUG: $uid için şifrelenmiş anahtar üretildi, uzunluk=${encrypted.length}")
+            targets.forEach { uid ->
+                val user = userRepository.fetchLocalUser(uid)
+                if (user != null) {
+                    val pubKey = user.publicKey ?: ""
+                    if (pubKey.isNotEmpty()) {
+                        try {
+                            val encrypted = KeyManager.encryptForPublicKey(pubKey, roomKey.toByteArray(Charsets.UTF_8))
+                            obj.put(uid, encrypted)
+                            Logger.d("E2EE_DEBUG: $uid için yerel DB'den anahtar üretildi.")
+                        } catch (e: Exception) {
+                            Logger.e("E2EE_DEBUG: $uid için şifreleme hatası!", e)
+                        }
+                    } else {
+                        Logger.d("E2EE_DEBUG: $uid için yerel DB'de anahtar bulunamadı!")
+                    }
+                } else {
+                    Logger.d("E2EE_DEBUG: $uid kullanıcısı yerel DB'de kayıtlı değil!")
                 }
-            } else {
-                Logger.e("E2EE_DEBUG: fetchUsers başarısız oldu!")
             }
-            Logger.d("E2EE_DEBUG: sonuç JSON = $obj")
+
+            Logger.d("E2EE_DEBUG: Yerel DB üzerinden üretilen sonuç JSON = $obj")
             obj.toString()
         }
 
@@ -1514,20 +1522,14 @@ class MainActivity : AppCompatActivity() {
                                     videoAdapter.removeTrack(identity)
                                 }
 
-                                // Sadece hiç kimse kalmadıysa odayı kapat
-                                if (newRoom.remoteParticipants.isEmpty()) {
-                                    Logger.e("Odada kimse kalmadı, ayrılıyoruz.")
-                                    leaveRoom(true)
-                                } else {
-                                    showStatus("$identity görüşmeden ayrıldı.")
-                                }
+                                // Yeni mekanizma: Çift kontrollü ayrılma
+                                checkIfAloneAndLeave(identity)
                             }
                         }
                         is RoomEvent.Disconnected -> {
                             Logger.e("EVENT: Room Disconnected (Oda bağlantısı tamamen koptu)")
                             runOnUiThread {
-                                leaveRoom(true)
-                                showStatus("Görüşme sunucu tarafından sonlandırıldı.")
+                                leaveRoom(true, "karşı taraf görüşmeden ayrıldı")
                             }
                         }
                         is RoomEvent.DataReceived -> {
@@ -1539,33 +1541,24 @@ class MainActivity : AppCompatActivity() {
                                 withContext(Dispatchers.Main) {
                                     if (newRoom.remoteParticipants.isEmpty()) {
                                         callTimeoutJob?.cancel()
-                                        leaveRoom(true)
+                                        leaveRoom(true, "$participantName aramayı reddetti.")
                                     } else {
                                         showStatus("$participantName aramayı reddetti.")
                                     }
                                 }
                             } else if (message.startsWith("LEFT_CALL:")) {
                                 val whoLeft = message.substringAfter("LEFT_CALL:")
-                                Logger.e("Kullanıcı ayrılma mesajı yolladı: $whoLeft. Kalan: ${newRoom.remoteParticipants.size}")
+                                val remoteSize = newRoom.remoteParticipants.size
+                                Logger.e("Kullanıcı ayrılma mesajı yolladı: $whoLeft. Kalan remote katılımcı sayısı: $remoteSize")
 
                                 withContext(Dispatchers.Main) {
-                                    // Eğer mesajı atan kişi remoteParticipants listesindeyse ve
-                                    // listede başka kimse yoksa (veya sadece o varsa) hemen çıkalım.
-                                    // Bazı durumlarda ParticipantDisconnected mesajdan sonra gelir.
-                                    val remoteSize = newRoom.remoteParticipants.size
-                                    val senderSid = event.participant?.sid
-
-                                    val shouldLeave = if (remoteSize == 0) true
-                                    else if (remoteSize == 1 && senderSid != null) {
-                                        // Eğer odadaki tek kişi mesajı atan kişiyse
-                                        newRoom.remoteParticipants.values.any { it.sid == senderSid }
-                                    } else false
-
-                                    if (shouldLeave) {
-                                        Logger.e("Son katılımcı da ayrıldı (mesaj yoluyla), çıkılıyor...")
-                                        leaveRoom(true)
+                                    if (remoteSize <= 1) {
+                                        // 1-on-1 veya son kişi ise odayı kapat
+                                        Logger.e("Birebir görüşme veya son kişi, oda kapatılıyor...")
+                                        leaveRoom(true, "karşı taraf görüşmeden ayrıldı")
                                     } else {
-                                        showStatus("$whoLeft görüşmeden ayrıldı.")
+                                        // Grupta başkaları varsa sadece bildir, kapatma
+                                        showStatus("$whoLeft adlı kullanıcı ayrıldı")
                                     }
                                 }
                             }
@@ -1663,7 +1656,31 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun leaveRoom(forced: Boolean = false) {
+    private fun checkIfAloneAndLeave(identity: String) {
+        val room = CallManager.room ?: return
+        val remoteCount = room.remoteParticipants.size
+        Logger.e("checkIfAloneAndLeave -> Kim çıktı: $identity, Kalan Remote: $remoteCount")
+
+        if (remoteCount == 0) {
+            leaveRoom(true, "karşı taraf görüşmeden ayrıldı")
+        } else {
+            // Grupta hala birileri varsa sadece mesaj ver
+            showStatus("$identity adlı kullanıcı ayrıldı")
+
+            // SDK'nın listeyi güncellemesi için 1 saniye sonra tekrar kontrol edelim (Garantili yöntem)
+            lifecycleScope.launch {
+                delay(1000.milliseconds)
+                val finalCount = CallManager.room?.remoteParticipants?.size ?: 0
+                Logger.e("checkIfAloneAndLeave (ÇİFT KONTROL) -> Kalan Remote: $finalCount")
+                if (finalCount == 0) {
+                    leaveRoom(true, "karşı taraf görüşmeden ayrıldı")
+                }
+            }
+        }
+    }
+
+    private fun leaveRoom(forced: Boolean = false, customMessage: String? = null) {
+        Logger.e("leaveRoom tetiklendi! forced=$forced, customMessage=$customMessage")
         callTimeoutJob?.cancel()
         controlsHideJob?.cancel()
         AudioManagerCompat.setSpeakerphoneOn(this, false)
@@ -1687,6 +1704,8 @@ class MainActivity : AppCompatActivity() {
                 try {
                     val identity = sessionPreferences.getCurrentIdentity() ?: "Biri"
                     CallManager.publishData("LEFT_CALL:$identity")
+                    // ÖNEMLİ: Verinin karşıya ulaşması için süreyi biraz daha artıralım
+                    delay(500.milliseconds)
                 } catch (_: Exception) {}
             }
 
@@ -1699,8 +1718,12 @@ class MainActivity : AppCompatActivity() {
                     lifecycleScope.launch { userRepository.sendHeartbeat(id) }
                 }
 
-                if (!forced) showStatus("Görüşmeden ayrıldın")
-                else showStatus("Görüşme sonlandırıldı")
+                if (customMessage != null) {
+                    showStatus(customMessage)
+                } else {
+                    if (!forced) showStatus("Görüşmeden ayrıldın")
+                    else showStatus("Görüşme sonlandırıldı")
+                }
             }
         }
     }

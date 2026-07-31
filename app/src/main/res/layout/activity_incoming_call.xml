@@ -1,11 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg_deep">
 
-    <!-- Gradient Overlay for a more premium look -->
+    <!-- Arayan kişinin fotoğrafı varsa buraya bulanık olarak basılacak -->
+    <ImageView
+        android:id="@+id/blurredBackground"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:alpha="0.4" />
+
+    <!-- Mevcut gradyan üzerine overlay olarak devam ediyor -->
     <View
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -15,24 +24,36 @@
         android:id="@+id/callTypeLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="60dp"
-        android:text="GELEN ARAMA"
+        android:layout_marginTop="160dp"
+        android:text="GELEN GÖRÜNTÜLÜ ARAMA"
         android:textColor="@color/accent_blue"
         android:textSize="14sp"
         android:textStyle="bold"
-        android:letterSpacing="0.2"
+        android:letterSpacing="0.3"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <!-- Avatar etrafındaki animasyonlu halka -->
+    <View
+        android:id="@+id/avatarRing"
+        android:layout_width="250dp"
+        android:layout_height="250dp"
+        android:background="@drawable/bg_avatar_ring"
+        android:alpha="0"
+        app:layout_constraintBottom_toBottomOf="@id/avatarCard"
+        app:layout_constraintEnd_toEndOf="@id/avatarCard"
+        app:layout_constraintStart_toStartOf="@id/avatarCard"
+        app:layout_constraintTop_toTopOf="@id/avatarCard" />
+
     <androidx.cardview.widget.CardView
         android:id="@+id/avatarCard"
-        android:layout_width="140dp"
-        android:layout_height="140dp"
-        android:layout_marginTop="30dp"
-        app:cardCornerRadius="70dp"
+        android:layout_width="200dp"
+        android:layout_height="200dp"
+        android:layout_marginTop="40dp"
+        app:cardCornerRadius="100dp"
         app:cardBackgroundColor="@color/bg_card"
-        app:cardElevation="16dp"
+        app:cardElevation="32dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/callTypeLabel">
@@ -42,8 +63,9 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:src="@drawable/ic_person"
-            android:padding="35dp"
-            app:tint="@color/accent_blue" />
+            android:padding="50dp"
+            app:tint="@color/accent_blue"
+            android:scaleType="centerCrop"/>
     </androidx.cardview.widget.CardView>
 
     <TextView
@@ -51,11 +73,14 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="32dp"
-        android:text="Kullanıcı Adı"
+        tools:text="Kullanıcı Adı"
         android:textColor="@color/white"
-        android:textSize="32sp"
+        android:textSize="34sp"
         android:textStyle="bold"
-        android:letterSpacing="0.05"
+        android:shadowColor="#80000000"
+        android:shadowDx="2"
+        android:shadowDy="2"
+        android:shadowRadius="4"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/avatarCard" />
@@ -65,10 +90,10 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
-        android:text="Gelen Görüntülü Arama..."
+        android:text="Arama yapılıyor..."
         android:textColor="@color/accent_blue"
         android:textSize="18sp"
-        android:alpha="0.8"
+        android:letterSpacing="0.05"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/callerNameText" />
@@ -78,41 +103,41 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center"
-        android:layout_marginBottom="100dp"
+        android:layout_marginBottom="80dp"
         app:layout_constraintBottom_toBottomOf="parent">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/declineButton"
             style="@style/Widget.MaterialComponents.Button.Icon"
-            android:layout_width="80dp"
-            android:layout_height="80dp"
-            android:layout_marginEnd="50dp"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_marginEnd="64dp"
             android:insetLeft="0dp"
             android:insetTop="0dp"
             android:insetRight="0dp"
             android:insetBottom="0dp"
             app:backgroundTint="@color/danger_red"
-            app:cornerRadius="40dp"
+            app:cornerRadius="36dp"
             app:icon="@drawable/ic_hangup"
-            app:iconSize="36dp"
+            app:iconSize="32dp"
             app:iconTint="@color/white"
-            app:elevation="8dp" />
+            app:elevation="12dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/acceptButton"
             style="@style/Widget.MaterialComponents.Button.Icon"
-            android:layout_width="80dp"
-            android:layout_height="80dp"
+            android:layout_width="84dp"
+            android:layout_height="84dp"
             android:insetLeft="0dp"
             android:insetTop="0dp"
             android:insetRight="0dp"
             android:insetBottom="0dp"
             app:backgroundTint="@color/success_green"
-            app:cornerRadius="40dp"
+            app:cornerRadius="42dp"
             app:icon="@android:drawable/ic_menu_call"
-            app:iconSize="36dp"
+            app:iconSize="38dp"
             app:iconTint="@color/white"
-            app:elevation="8dp" />
+            app:elevation="12dp" />
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

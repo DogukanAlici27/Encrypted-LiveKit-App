@@ -44,10 +44,20 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
         val caller = remoteMessage.data["caller"] ?: "Bilinmeyen"
         val room = remoteMessage.data["room"]
+        
+        // Sunucu desteği olmadan oda isminden arama türünü çözüyoruz
+        val isVideo = if (room != null) {
+            !room.startsWith("AUDIO_")
+        } else {
+            remoteMessage.data["video"]?.toBoolean() ?: true
+        }
+        
+        Log.e("FCM_DEBUG", "Gelen Bildirim Verisi -> Room: $room, isVideo: $isVideo")
+        
         // YENİ: sunucunun sadece taşıdığı (asla çözmediği), bu cihaza özel şifreli oda anahtarı
         val encryptedRoomKey = remoteMessage.data["encryptedRoomKey"]
 
-        Log.d("FCM", "Bildirim geldi. Arayan: $caller, Room: $room")
+        Log.d("FCM", "Bildirim geldi. Arayan: $caller, Room: $room, Video: $isVideo")
 
         // 0. ENGEL KONTROLÜ
         serviceScope.launch {
@@ -61,12 +71,12 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             }
 
             withContext(Dispatchers.Main) {
-                processMessage(remoteMessage, caller, room, encryptedRoomKey)
+                processMessage(remoteMessage, caller, room, encryptedRoomKey, isVideo)
             }
         }
     }
 
-    private fun processMessage(remoteMessage: RemoteMessage, caller: String, room: String?, encryptedRoomKey: String?) {
+    private fun processMessage(remoteMessage: RemoteMessage, caller: String, room: String?, encryptedRoomKey: String?, isVideo: Boolean) {
         // 1. MEŞGULİYET KONTROLÜ
         // YENİ: Artık tamamen susmuyoruz. Zaten görüşmedeysek tam ekran arama ekranını
         // açmak yerine, arayanı bildiren sade bir bildirim gösteriyoruz.
@@ -95,7 +105,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         }
 
         if (room != null) {
-            showCallNotification(caller, room, encryptedRoomKey)
+            showCallNotification(caller, room, encryptedRoomKey, isVideo)
         }
     }
 
@@ -132,7 +142,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         getSharedPreferences("LiveKit", MODE_PRIVATE).edit().putString("fcm_token", token).apply()
     }
 
-    private fun showCallNotification(caller: String, room: String, encryptedRoomKey: String?) {
+    private fun showCallNotification(caller: String, room: String, encryptedRoomKey: String?, isVideo: Boolean) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "call_channel_v3" // Ayarların sıfırlanması için v3 yaptık
 
@@ -151,6 +161,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val fullScreenIntent = Intent(this, IncomingCallActivity::class.java).apply {
             putExtra("incoming_room", room)
             putExtra("incoming_caller", caller)
+            putExtra("is_video", isVideo)
             // YENİ: şifreli oda anahtarı, çözülmeden IncomingCallActivity'ye taşınıyor.
             // Çözme işlemi ancak kullanıcı "Kabul Et"e basınca, orada gerçekleşecek.
             putExtra("incoming_room_key", encryptedRoomKey)
@@ -162,9 +173,11 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val callTypeTitle = if (isVideo) "Gelen Görüntülü Arama" else "Gelen Sesli Arama"
+
         val notificationBuilder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.ic_menu_call)
-            .setContentTitle("Gelen Görüntülü Arama")
+            .setContentTitle(callTypeTitle)
             .setContentText("$caller seni arıyor...")
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_CALL)
