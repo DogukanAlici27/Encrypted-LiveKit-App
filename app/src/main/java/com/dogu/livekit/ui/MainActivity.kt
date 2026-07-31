@@ -206,6 +206,7 @@ class MainActivity : AppCompatActivity() {
                         updateConnectionStatusBadge(state.isOnline)
                         loadOwnProfilePhoto()
                         navigateToContacts()
+                        contactsViewModel.syncBlocksFromServer()
                     }
                     is AuthViewModel.AuthState.Error -> {
                         showStatus(state.message)
@@ -706,6 +707,14 @@ class MainActivity : AppCompatActivity() {
     private fun navigateToContacts() {
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
         bottomNav.selectedItemId = R.id.nav_contacts
+
+        // Login sonrası kendi aktifliğimizin hemen yansıması için
+        // önce heartbeat at (server'da lastSeen'i tazele), ardından listeyi çek
+        lifecycleScope.launch {
+            val identity = sessionPreferences.getCurrentIdentity() ?: return@launch
+            userRepository.sendHeartbeat(identity)
+            refreshContacts()
+        }
     }
 
     private fun refreshContacts() {
@@ -1817,6 +1826,7 @@ class MainActivity : AppCompatActivity() {
             val fcmToken = if (task.isSuccessful) task.result else "NO_TOKEN"
             lifecycleScope.launch {
                 userRepository.restoreCurrentUserOnServer(identity, fcmToken)
+                contactsViewModel.syncBlocksFromServer()
             }
         }
     }

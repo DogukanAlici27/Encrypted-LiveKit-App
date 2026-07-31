@@ -6,8 +6,8 @@ import com.dogu.livekit.data.entity.UserEntity
 import com.dogu.livekit.network.NetworkClient
 import com.dogu.livekit.pref.SessionPreferences
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import org.json.JSONArray
@@ -32,10 +32,10 @@ class UserRepository @Inject constructor(
             val user = usersArray.getJSONObject(i)
             val identity = user.getString("identity").trim()
             val existing = db.userDao().getUser(identity)
-            
+
             val rawRoom = user.optString("currentRoom", "")
             val currentRoom = if (rawRoom == "null" || rawRoom.isEmpty()) null else rawRoom
-            
+
             entities.add(UserEntity(
                 identity = identity,
                 password = existing?.password,
@@ -44,7 +44,9 @@ class UserRepository @Inject constructor(
                 currentRoom = currentRoom,
                 publicKey = user.optString("publicKey", ""),
                 needsSync = false,
-                isBlocked = existing?.isBlocked ?: false
+                // /users endpoint'i isBlocked dönüyor; onu koru, yoksa mevcutu koru
+                isBlocked = if (user.has("isBlocked")) user.optBoolean("isBlocked", false)
+                else existing?.isBlocked ?: false
             ))
         }
         if (entities.isNotEmpty()) db.userDao().insertUsers(entities)
@@ -52,12 +54,12 @@ class UserRepository @Inject constructor(
 
     suspend fun syncUnsyncedUsers(fcmToken: String) = withContext(Dispatchers.IO) {
         val currentIdentity = sessionPreferences.getCurrentIdentity()
-        
+
         val unsynced = db.userDao().getUnsyncedUsers()
         unsynced.forEach { user ->
             val isMe = user.identity.trim() == currentIdentity?.trim()
             val result = auth("register", user.identity, user.password ?: "", fcmToken, user.publicKey, isOnline = isMe)
-            
+
             if (result.isSuccess || result.exceptionOrNull()?.message?.contains("409") == true) {
                 db.userDao().markAsSynced(user.identity)
             }
@@ -205,7 +207,7 @@ class UserRepository @Inject constructor(
             val roomName = if (currentRoom != null && currentRoom.state == io.livekit.android.room.Room.State.CONNECTED) {
                 currentRoom.name
             } else {
-                "" // Boş string göndererek sunucuda odayı temizle
+                ""
             }
             val json = JSONObject().apply {
                 put("identity", identity)
@@ -227,10 +229,103 @@ class UserRepository @Inject constructor(
         } catch (e: Exception) {}
     }
 
+    // -------------------------------------------------------------------
+    // ENGELLEME — LOCAL DB
+    // -------------------------------------------------------------------
+
+    /**
+     * Local DB'de engel durumunu günceller.
+     * Burası sadece Room'a yazar. Server sync için sendBlockToServer() çağrılmalı.
+     */
     suspend fun updateBlockedStatus(identity: String, isBlocked: Boolean) = withContext(Dispatchers.IO) {
         db.userDao().updateBlockedStatus(identity, isBlocked)
     }
 
-    suspend fun getBlockedUsers(): Flow<List<UserEntity>> =
+    fun getBlockedUsers(): Flow<List<UserEntity>> =
         db.userDao().getBlockedUsers()
+
+    // -------------------------------------------------------------------
+    // ENGELLEME — SUNUCU SYNC
+    // -------------------------------------------------------------------
+
+    /**
+     * Engelleme/kaldırma kararını sunucuya bildirir.
+     * POST /block-user { myIdentity, targetIdentity, isBlocked }
+     *
+     * Ağ yoksa hata dönülür; ViewModel bu durumda sadece log basar,
+     * local değişiklik zaten DB'ye yazılmıştır.
+     */
+    suspend fun sendBlockToServer(myIdentity: String, targetIdentity: String, isBlocked: Boolean): Result<Boolean> =
+        withContext(Dispatchers.IO) {
+            try {
+                val json = JSONObject().apply {
+                    put("myIdentity", myIdentity)
+                    put("targetIdentity", targetIdentity)
+                    put("isBlocked", isBlocked)
+                }
+                val request = NetworkClient.createPostRequest("/block-user", json)
+                httpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) Result.success(true)
+                    else Result.failure(IOException("Block sync hatası: ${response.code}"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+    /**
+     * Sunucudaki blok listesini çekip local DB ile senkronize eder.
+     * GET /my-blocks?identity=ahmet  →  { blockedUsers: ["mehmet","ayse"] }
+     *
+     * Strateji:
+     *  1. Server'daki engelleri al.
+     *  2. Local'de engelli ama server'da değil → local'i server'a zorla (sendBlockToServer).
+     *  3. Server'da engelli ama local'de değil → local DB'yi güncelle.
+     *
+     * Böylece her iki taraf her zaman senkronize kalır.
+     */
+    suspend fun syncBlockedUsersFromServer(myIdentity: String): Result<Unit> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val url = "${NetworkClient.TOKEN_SERVER_URL}/my-blocks?identity=$myIdentity"
+                val request = NetworkClient.createGetRequest(url)
+                val response = httpClient.newCall(request).execute()
+
+                if (!response.isSuccessful) {
+                    response.close()
+                    return@withContext Result.failure<Unit>(IOException("Blok listesi çekilemedi: ${response.code}"))
+                }
+
+                val body = response.body?.string() ?: "{}"
+                response.close()
+
+                val serverBlockedList = JSONObject(body).optJSONArray("blockedUsers") ?: JSONArray()
+
+                val serverBlocked = mutableSetOf<String>()
+                for (i in 0 until serverBlockedList.length()) {
+                    serverBlocked.add(serverBlockedList.getString(i))
+                }
+
+                val localBlocked = db.userDao().getBlockedUsers().first()
+                    .map { it.identity }
+                    .toSet()
+
+                // Local'de var, server'da yok → server'a gönder
+                val onlyInLocal = localBlocked - serverBlocked
+                for (identity in onlyInLocal) {
+                    sendBlockToServer(myIdentity, identity, true)
+                }
+
+                // Server'da var, local'de yok → local DB'yi güncelle
+                val onlyOnServer = serverBlocked - localBlocked
+                for (identity in onlyOnServer) {
+                    db.userDao().updateBlockedStatus(identity, true)
+                }
+
+                Result.success(Unit)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
 }
