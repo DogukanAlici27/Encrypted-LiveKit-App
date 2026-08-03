@@ -250,6 +250,10 @@ class UserRepository @Inject constructor(
     fun getBlockedUsers(): Flow<List<UserEntity>> =
         db.userDao().getBlockedUsers()
 
+    suspend fun updateMutedStatus(identity: String, isMuted: Boolean) = withContext(Dispatchers.IO) {
+        db.userDao().updateMutedStatus(identity, isMuted)
+    }
+
     // -------------------------------------------------------------------
     // ENGELLEME — SUNUCU SYNC
     // -------------------------------------------------------------------

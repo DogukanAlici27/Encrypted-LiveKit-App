@@ -39,6 +39,9 @@ interface UserDao {
     @Query("UPDATE users SET isBlocked = :isBlocked WHERE identity = :identity")
     suspend fun updateBlockedStatus(identity: String, isBlocked: Boolean)
 
+    @Query("UPDATE users SET isMuted = :isMuted WHERE identity = :identity")
+    suspend fun updateMutedStatus(identity: String, isMuted: Boolean)
+
     @Query("SELECT * FROM users WHERE isBlocked = 1")
     fun getBlockedUsers(): Flow<List<UserEntity>>
 }

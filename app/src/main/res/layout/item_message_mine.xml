@@ -23,35 +23,39 @@
             android:id="@+id/messageText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:maxWidth="280dp"
+            android:maxWidth="240dp"
             android:textColor="@color/white"
             android:textSize="16sp"
             android:lineSpacingExtra="2dp"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            tools:text="Hello, this is a very modern message with multiple lines of text to test how it wraps." />
+            tools:text="Hello!" />
 
         <LinearLayout
+            android:id="@+id/timeLayout"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginTop="2dp"
+            android:layout_marginStart="8dp"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/messageText">
+            app:layout_constraintStart_toEndOf="@id/messageText"
+            app:layout_constraintTop_toTopOf="@id/messageText"
+            app:layout_constraintVertical_bias="1.0">
 
             <TextView
                 android:id="@+id/timeText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="#CCFFFFFF"
-                android:textSize="11sp"
+                android:textSize="10sp"
                 tools:text="14:20" />
 
             <ImageView
                 android:id="@+id/statusIcon"
-                android:layout_width="15dp"
-                android:layout_height="15dp"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
                 android:layout_marginStart="4dp"
                 android:src="@drawable/ic_double_tick"
                 app:tint="@color/wa_status_blue" />

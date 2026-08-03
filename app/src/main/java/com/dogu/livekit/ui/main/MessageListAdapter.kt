@@ -17,7 +17,8 @@ import java.util.*
 
 class MessageListAdapter(
     private val myIdentity: String,
-    private val onChatClick: (String) -> Unit
+    private val onChatClick: (String) -> Unit,
+    private val onLongClick: (String, Boolean) -> Unit
 ) : ListAdapter<MessageEntity, MessageListAdapter.ViewHolder>(DiffCallback()) {
 
     private var users: List<UserEntity> = emptyList()
@@ -44,6 +45,7 @@ class MessageListAdapter(
         private val lastMessageText: TextView = view.findViewById(R.id.contactStatus)
         private val avatarImg: ImageView = view.findViewById(R.id.contactAvatar)
         private val timeText: TextView = view.findViewById(R.id.lastSeenText)
+        private val muteImg: ImageView = view.findViewById(R.id.muteStatusImg)
         private val statusDot: View = view.findViewById(R.id.statusDot)
         private val callBtn: View = view.findViewById(R.id.contactCallBtn)
         private val chatBtn: View = view.findViewById(R.id.contactChatBtn)
@@ -59,6 +61,8 @@ class MessageListAdapter(
             callBtn.visibility = View.GONE
             chatBtn.visibility = View.GONE
             selectCb.visibility = View.GONE
+            
+            muteImg.visibility = if (user?.isMuted == true) View.VISIBLE else View.GONE
 
             if (user?.profilePhoto?.isNotEmpty() == true) {
                 val bitmap = ImageUtils.base64ToBitmap(user.profilePhoto)
@@ -73,6 +77,10 @@ class MessageListAdapter(
             }
 
             itemView.setOnClickListener { onChatClick(otherParty) }
+            itemView.setOnLongClickListener {
+                onLongClick(otherParty, user?.isMuted ?: false)
+                true
+            }
         }
 
         private fun setDefaultAvatar() {

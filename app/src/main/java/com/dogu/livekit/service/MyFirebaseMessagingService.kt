@@ -99,6 +99,11 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
         serviceScope.launch {
             messageRepository.receiveMessage(sender, content, timestamp)
+            val user = userRepository.fetchLocalUser(sender)
+            if (user?.isMuted == true) {
+                Log.d("FCM", "Mesaj sessize alınan kullanıcıdan ($sender) geldi. Bildirim gösterilmiyor.")
+                return@launch
+            }
             withContext(Dispatchers.Main) {
                 showChatNotification(sender, content)
             }

@@ -58,4 +58,10 @@ class ChatViewModel @Inject constructor(
             messageRepository.deleteMessageForEveryone(message)
         }
     }
+
+    fun toggleMute(identity: String, currentStatus: Boolean) {
+        viewModelScope.launch {
+            userRepository.updateMutedStatus(identity, !currentStatus)
+        }
+    }
 }

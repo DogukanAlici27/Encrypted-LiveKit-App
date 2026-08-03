@@ -24,6 +24,7 @@ import com.dogu.livekit.core.encryption.KeyManager
 import com.dogu.livekit.core.util.PermissionUtils
 import com.dogu.livekit.core.util.showStatus
 import com.dogu.livekit.data.local.prefs.SessionPreferences
+import com.dogu.livekit.data.local.entity.UserEntity
 import com.dogu.livekit.databinding.ActivityMainBinding
 import com.dogu.livekit.domain.call.CallManager
 import com.dogu.livekit.ui.auth.AuthViewModel
@@ -61,7 +62,7 @@ class MainActivity : AppCompatActivity() {
     private val historyAdapter = CallLogAdapter()
     private val contactsAdapter = ContactsAdapter(
         onCallClick = { user -> startCall(user.identity) },
-        onBlockClick = { user -> showBlockUserDialog(user.identity) },
+        onLongClick = { user -> showBlockUserDialog(user.identity) },
         onSelectionChanged = { user, isChecked ->
             if (isChecked) selectedParticipants.add(user.identity)
             else selectedParticipants.remove(user.identity)
@@ -421,7 +422,11 @@ class MainActivity : AppCompatActivity() {
         binding.contactsRecyclerView.adapter = contactsAdapter
 
         val myId = sessionPreferences.getCurrentIdentity() ?: ""
-        messageListAdapter = MessageListAdapter(myId) { identity -> openChat(identity) }
+        messageListAdapter = MessageListAdapter(
+            myId,
+            onChatClick = { identity -> openChat(identity) },
+            onLongClick = { identity, isMuted -> showConversationOptionsDialog(identity, isMuted) }
+        )
         binding.messagesRecyclerView.adapter = messageListAdapter
 
         binding.remoteVideosRecyclerView.apply {
@@ -448,12 +453,13 @@ class MainActivity : AppCompatActivity() {
         binding.addParticipantButton.setOnClickListener { showAddParticipantDialog() }
 
         binding.clearHistoryBtn.setOnClickListener {
-            androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("Geçmişi Temizle")
-                .setMessage("Tüm arama geçmişini silmek istediğinize emin misiniz?")
-                .setPositiveButton("Evet") { _, _ -> historyViewModel.clearHistory() }
-                .setNegativeButton("Hayır", null)
-                .show()
+            showModernConfirmDialog(
+                "Geçmişi Temizle",
+                "Tüm arama geçmişini silmek istediğinize emin misiniz?",
+                "TEMİZLE"
+            ) {
+                historyViewModel.clearHistory()
+            }
         }
 
         binding.editProfilePhotoFab.setOnClickListener {
@@ -581,47 +587,62 @@ class MainActivity : AppCompatActivity() {
 
     private fun performLogout() {
         val identity = sessionPreferences.getCurrentIdentity() ?: return
-        authViewModel.logout(identity)
+        showModernConfirmDialog(
+            "Oturumu Kapat",
+            "Hesabınızdan çıkış yapmak istediğinize emin misiniz?",
+            "ÇIKIŞ YAP"
+        ) {
+            authViewModel.logout(identity)
+        }
     }
 
     private fun confirmAccountDeletion() {
         val identity = sessionPreferences.getCurrentIdentity() ?: return
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Hesabı Sil")
-            .setMessage("'$identity' kullanıcısını hem bu telefondan hem de sunucudan kalıcı olarak silmek istediğine emin misin?")
-            .setPositiveButton("SİL") { _, _ -> authViewModel.deleteAccount(identity) }
-            .setNegativeButton("VAZGEÇ", null)
-            .show()
+        showModernConfirmDialog(
+            "Hesabı Sil",
+            "'$identity' kullanıcısını hem bu telefondan hem de sunucudan kalıcı olarak silmek istediğine emin misin?",
+            "KALICI OLARAK SİL"
+        ) {
+            authViewModel.deleteAccount(identity)
+        }
     }
 
     private fun showChangePasswordDialog() {
         val identity = sessionPreferences.getCurrentIdentity() ?: return
-        val dialogView = layoutInflater.inflate(R.layout.dialog_change_password, null)
-        val oldPassEt = dialogView.findViewById<EditText>(R.id.oldPasswordEt)
-        val newPassEt = dialogView.findViewById<EditText>(R.id.newPasswordEt)
-        val confirmPassEt = dialogView.findViewById<EditText>(R.id.confirmPasswordEt)
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .create()
+        val view = layoutInflater.inflate(R.layout.dialog_change_password, null)
+        dialog.setView(view)
 
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setView(dialogView)
-            .setPositiveButton("DEĞİŞTİR") { _, _ ->
-                val oldPass = oldPassEt.text.toString().trim()
-                val newPass = newPassEt.text.toString().trim()
-                val confirmPass = confirmPassEt.text.toString().trim()
+        val oldPassEt = view.findViewById<EditText>(R.id.oldPasswordEt)
+        val newPassEt = view.findViewById<EditText>(R.id.newPasswordEt)
+        val confirmPassEt = view.findViewById<EditText>(R.id.confirmPasswordEt)
 
-                if (oldPass.isEmpty() || newPass.isEmpty()) {
-                    Toast.makeText(this, "Alanlar boş bırakılamaz", Toast.LENGTH_SHORT).show()
-                    return@setPositiveButton
-                }
+        view.findViewById<View>(R.id.btnSavePass).setOnClickListener {
+            val oldPass = oldPassEt.text.toString().trim()
+            val newPass = newPassEt.text.toString().trim()
+            val confirmPass = confirmPassEt.text.toString().trim()
 
-                if (newPass != confirmPass) {
-                    Toast.makeText(this, "Yeni şifreler eşleşmiyor", Toast.LENGTH_SHORT).show()
-                    return@setPositiveButton
-                }
-
-                authViewModel.changePassword(identity, oldPass, newPass)
+            if (oldPass.isEmpty() || newPass.isEmpty()) {
+                Toast.makeText(this, "Alanlar boş bırakılamaz", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
             }
-            .setNegativeButton("VAZGEÇ", null)
-            .show()
+
+            if (newPass != confirmPass) {
+                Toast.makeText(this, "Yeni şifreler eşleşmiyor", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            authViewModel.changePassword(identity, oldPass, newPass)
+            dialog.dismiss()
+        }
+
+        view.findViewById<View>(R.id.btnCancelPass).setOnClickListener {
+            dialog.dismiss()
+        }
+
+        dialog.show()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
     }
 
     private fun loadSession() {
@@ -683,16 +704,99 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showBlockUserDialog(identity: String) {
+    private fun showContactOptionsDialog(user: UserEntity) {
+        val options = arrayOf(
+            if (user.isBlocked) "Engeli Kaldır" else "Engelle",
+            if (user.isMuted) "Bildirimlerin Sesini Aç" else "Bildirimleri Sessize Al"
+        )
         androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Kişiyi Engelle")
-            .setMessage("$identity kullanıcısını engellemek istiyor musunuz? Engellenen kişiler sizi arayamaz ve rehberinizde görünmez.")
-            .setPositiveButton("Engelle") { _, _ ->
-                contactsViewModel.toggleBlockUser(identity, true)
-                showStatus("$identity engellendi")
+            .setTitle(user.identity)
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> {
+                        if (user.isBlocked) contactsViewModel.toggleBlockUser(user.identity, false)
+                        else showBlockUserDialog(user.identity)
+                    }
+                    1 -> chatViewModel.toggleMute(user.identity, user.isMuted)
+                }
             }
-            .setNegativeButton("İptal", null)
             .show()
+    }
+
+    private fun showBlockUserDialog(identity: String) {
+        val user = contactsViewModel.contacts.value.find { it.identity == identity }
+        val isBlocked = user?.isBlocked == true
+        
+        val title = if (isBlocked) "Engeli Kaldır" else "Kişiyi Engelle"
+        val message = if (isBlocked) "$identity kullanıcısının engelini kaldırmak istiyor musunuz?" 
+                      else "$identity kullanıcısını engellemek istiyor musunuz? Engellenen kişiler sizi arayamaz ve rehberinizde görünmez."
+        val buttonText = if (isBlocked) "Kaldır" else "Engelle"
+
+        showModernConfirmDialog(title, message, buttonText) {
+            contactsViewModel.toggleBlockUser(identity, !isBlocked)
+            showStatus(if (isBlocked) "$identity engeli kaldırıldı" else "$identity engellendi")
+        }
+    }
+
+    private fun showConversationOptionsDialog(identity: String, isMuted: Boolean) {
+        val dialog = BottomSheetDialog(this, R.style.TransparentBottomSheetDialogTheme)
+        val view = layoutInflater.inflate(R.layout.layout_bottom_sheet_options, null)
+        dialog.setContentView(view)
+
+        view.findViewById<TextView>(R.id.sheetTitle).text = identity
+        
+        val opt1 = view.findViewById<View>(R.id.option1)
+        view.findViewById<TextView>(R.id.option1Text).text = "Mesajları Sil"
+        view.findViewById<ImageView>(R.id.option1Icon).setImageResource(R.drawable.ic_delete)
+        opt1.setOnClickListener {
+            dialog.dismiss()
+            confirmDeleteConversation(identity)
+        }
+
+        val opt2 = view.findViewById<View>(R.id.option2)
+        view.findViewById<TextView>(R.id.option2Text).text = if (isMuted) "Bildirimlerin Sesini Aç" else "Bildirimleri Sessize Al"
+        view.findViewById<ImageView>(R.id.option2Icon).setImageResource(R.drawable.ic_notifications_off)
+        opt2.setOnClickListener {
+            dialog.dismiss()
+            chatViewModel.toggleMute(identity, isMuted)
+        }
+
+        dialog.show()
+    }
+
+    private fun confirmDeleteConversation(identity: String) {
+        showModernConfirmDialog(
+            "Konuşmayı Sil",
+            "$identity ile olan tüm mesajları silmek istediğinize emin misiniz?",
+            "SİL"
+        ) {
+            chatViewModel.deleteConversation(identity)
+            showStatus("Konuşma silindi")
+        }
+    }
+
+    private fun showModernConfirmDialog(title: String, message: String, positiveBtnText: String, onPositive: () -> Unit) {
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .create()
+        val view = layoutInflater.inflate(R.layout.layout_modern_confirm_dialog, null)
+        dialog.setView(view)
+        
+        view.findViewById<TextView>(R.id.dialogTitle).text = title
+        view.findViewById<TextView>(R.id.dialogMessage).text = message
+        
+        val btnPos = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnPositive)
+        btnPos.text = positiveBtnText
+        btnPos.setOnClickListener {
+            onPositive()
+            dialog.dismiss()
+        }
+        
+        view.findViewById<View>(R.id.btnNegative).setOnClickListener {
+            dialog.dismiss()
+        }
+        
+        dialog.show()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
     }
 
     private fun showAddParticipantDialog() {

@@ -18,7 +18,7 @@ import com.google.android.material.button.MaterialButton
 
 class ContactsAdapter(
     private val onCallClick: (UserEntity) -> Unit,
-    private val onBlockClick: (UserEntity) -> Unit,
+    private val onLongClick: (UserEntity) -> Unit,
     private val onSelectionChanged: (UserEntity, Boolean) -> Unit,
     private val onChatClick: (UserEntity) -> Unit
 ) : ListAdapter<UserEntity, ContactsAdapter.ContactViewHolder>(UserDiffCallback()) {
@@ -26,17 +26,20 @@ class ContactsAdapter(
     var isOffline: Boolean = false
 
     inner class ContactViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val avatarImg: ImageView = view.findViewById(R.id.contactAvatar)
-        val nameTv: TextView = view.findViewById(R.id.contactName)
-        val statusDot: View = view.findViewById(R.id.statusDot)
-        val statusTv: TextView = view.findViewById(R.id.contactStatus)
-        val selectCb: CheckBox = view.findViewById(R.id.contactSelectCb)
-        val chatBtn: MaterialButton = view.findViewById(R.id.contactChatBtn)
-        val callBtn: MaterialButton = view.findViewById(R.id.contactCallBtn)
+        private val avatarImg: ImageView = view.findViewById(R.id.contactAvatar)
+        private val nameTv: TextView = view.findViewById(R.id.contactName)
+        private val statusDot: View = view.findViewById(R.id.statusDot)
+        private val statusTv: TextView = view.findViewById(R.id.contactStatus)
+        private val muteImg: ImageView = view.findViewById(R.id.muteStatusImg)
+        private val selectCb: CheckBox = view.findViewById(R.id.contactSelectCb)
+        private val chatBtn: MaterialButton = view.findViewById(R.id.contactChatBtn)
+        private val callBtn: MaterialButton = view.findViewById(R.id.contactCallBtn)
 
         fun bind(user: UserEntity) {
             nameTv.text = user.identity
             val context = itemView.context
+            
+            muteImg.visibility = View.GONE
 
             val photoBase64 = user.profilePhoto
             if (!photoBase64.isNullOrEmpty()) {
@@ -90,7 +93,7 @@ class ContactsAdapter(
             callBtn.setOnClickListener { onCallClick(user) }
             chatBtn.setOnClickListener { onChatClick(user) }
             itemView.setOnLongClickListener {
-                onBlockClick(user)
+                onLongClick(user)
                 true
             }
         }

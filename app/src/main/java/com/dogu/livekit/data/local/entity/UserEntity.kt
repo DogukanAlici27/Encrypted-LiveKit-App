@@ -13,5 +13,6 @@ data class UserEntity(
     val publicKey: String? = null,
     val needsSync: Boolean = false, // Sunucuya gönderilmediyse true
     val isBlocked: Boolean = false,
+    val isMuted: Boolean = false,
     val lastUpdated: Long = System.currentTimeMillis()
 )
