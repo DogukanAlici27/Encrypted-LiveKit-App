@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">LiveKit</string>
+    <string name="account_username_label">Kullanıcı adı: %s</string>
+    <string name="guest">Misafir</string>
+    <string name="permission_required">İzinler gerekli</string>
+    <string name="loading">İşlem yapılıyor...</string>
 </resources>

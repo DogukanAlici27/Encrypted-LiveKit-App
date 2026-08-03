@@ -48,7 +48,7 @@ Token server sadece "kapıyı açan" taraf — bağlantı kurulduktan sonra devr
 
 ## 2. Android Uygulaması (`app/src/main/java/com/dogu/livekit/`)
 
-### 2.1 `ui/MainActivity.kt` (1085 satır) — Projenin kalbi
+### 2.1 `ui/main/MainActivity.kt` (1085 satır) — Projenin kalbi
 
 Bu, hem giriş ekranını, hem rehberi, hem de arama ekranını yöneten tek bir dev `Activity`. Küçük internship projelerinde sık görülen "God Activity" yaklaşımı — yani MVVM gibi katmanlara ayrılmamış, her şey tek dosyada.
 
@@ -107,7 +107,7 @@ private suspend fun connectToRoom(url: String, token: String, useVideo: Boolean)
 }
 ```
 
-### 2.2 `call/CallManager.kt` (109 satır) — LiveKit bağlantı yöneticisi
+### 2.2 `domain/call/CallManager.kt` (109 satır) — LiveKit bağlantı yöneticisi
 
 `MainActivity`'nin LiveKit SDK'sı ile doğrudan uğraşmaması için araya konan bir katman (soyutlama). `object` (Kotlin'de singleton) olduğu için uygulama boyunca **tek bir `room` referansı** tutuluyor — bu sayede `CallManager.isBusy()` gibi kontroller her yerden yapılabiliyor.
 
@@ -147,7 +147,7 @@ object CallManager {
 
 `isBusy()` fonksiyonu özellikle önemli: `MyFirebaseMessagingService` gelen bir bildirim aldığında, eğer sen zaten başka bir görüşmedeysen bu fonksiyon `true` döner ve yeni bildirim gösterilmez.
 
-### 2.3 `encryption/EncryptionManager.kt` — E2EE katmanı
+### 2.3 `core/encryption/EncryptionManager.kt` — E2EE katmanı
 
 ```kotlin
 object EncryptionManager {
@@ -165,7 +165,7 @@ Tek işi: tüm katılımcıların bildiği ortak bir parolayı `KeyProvider`'a v
 
 ⚠️ **Önemli not:** Parola şu an hardcoded ve herkes aynı sabiti biliyor. Gerçek bir üründe bu parola, her görüşme için token server tarafından dinamik üretilip güvenli bir kanaldan (token ile birlikte) dağıtılmalı.
 
-### 2.4 `call/CallService.kt` (68 satır) — Foreground Service
+### 2.4 `service/CallService.kt` (68 satır) — Foreground Service
 
 Android, arka plana atılan uygulamaların ses/kamera kullanımını kısıtlar/keser. Bu servis, `startForeground()` ile sistemi "bu bir aktif görüşme, öldürme" diye uyarır.
 
@@ -187,7 +187,7 @@ private fun startHeartbeat() {
 }
 ```
 
-### 2.5 `MyFirebaseMessagingService.kt` — Gelen arama bildirimleri
+### 2.5 `service/MyFirebaseMessagingService.kt` — Gelen arama bildirimleri
 
 Firebase Cloud Messaging'den bir push bildirimi geldiğinde tetiklenen servis.
 
@@ -210,7 +210,7 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
 
 `showCallNotification`, kilit ekranının üzerinde açılan bir tam ekran bildirim (`setFullScreenIntent`) oluşturup `IncomingCallActivity`'yi başlatıyor.
 
-### 2.6 `ui/IncomingCallActivity.kt` (163 satır) — Gelen arama ekranı
+### 2.6 `ui/call/IncomingCallActivity.kt` (163 satır) — Gelen arama ekranı
 
 ```kotlin
 private fun acceptCall(caller: String, room: String) {
@@ -239,7 +239,7 @@ private fun declineCall(room: String) {
 
 İlginç detay: "Reddet" butonuna basınca uygulama **gerçekten odaya kısa süreliğine bağlanıp** bir veri paketi (`"REJECTED"`) yayınlıyor, sonra hemen ayrılıyor. Bu, arayan tarafın "karşı taraf reddetti" bilgisini anlık olarak alabilmesi için.
 
-### 2.7 `ui/VideoAdapter.kt` (90 satır) — Video ızgarası
+### 2.7 `ui/call/VideoAdapter.kt` (90 satır) — Video ızgarası
 
 Görüşmedeki her katılımcının kamerasını bir `RecyclerView` grid'inde gösteren adapter.
 
@@ -267,14 +267,14 @@ class VideoAdapter : RecyclerView.Adapter<VideoAdapter.VideoViewHolder>() {
 
 | Dosya | Ne işe yarar |
 |---|---|
-| `network/NetworkClient.kt` | Token server'ın URL'ini seçer. Cihazın emülatör mü gerçek telefon mu olduğunu `Build.FINGERPRINT` gibi bilgilere bakarak anlar; emülatörse `10.0.2.2:3005`, gerçek cihazsa bilgisayarının IP'si (`10.0.2.120:3005`) kullanılır. |
-| `network/UserRepository.kt` | Tüm HTTP isteklerini (`auth`, `fetchUsers`, `fetchToken`, `sendHeartbeat`, `sendOffline`) tek yerde toplayan repository katmanı. Her fonksiyon `Result<T>` döner (başarı/hata). |
-| `pref/SessionPreferences.kt` | `SharedPreferences` üzerinden "giriş yapılmış mı", "beni hatırla" bilgisini saklar. |
-| `hardware/AudioManagerCompat.kt` | Hoparlör/kulaklık modu arasında geçiş yapar (`AudioManager.MODE_IN_COMMUNICATION`). |
-| `logging/Logger.kt` | `Log.d/e/i`'yi sarmalayan, tek bir `TAG` kullanan basit logger. |
-| `util/ImageUtils.kt` | Profil fotoğrafını `Bitmap` <-> `Base64 String` arasında çevirir (sunucuya JSON içinde göndermek için). |
-| `util/KeyboardUtils.kt` | Klavyeyi programatik olarak gizler. |
-| `util/PermissionUtils.kt` | Gereken izinlerin listesini (`RECORD_AUDIO`, `CAMERA`, `POST_NOTIFICATIONS`) döner ve hepsinin verilip verilmediğini kontrol eder. |
+| `data/remote/NetworkClient.kt` | Token server'ın URL'ini seçer. Cihazın emülatör mü gerçek telefon mu olduğunu `Build.FINGERPRINT` gibi bilgilere bakarak anlar; emülatörse `10.0.2.2:3005`, gerçek cihazsa bilgisayarının IP'si (`10.0.2.120:3005`) kullanılır. |
+| `data/repository/UserRepository.kt` | Tüm HTTP isteklerini (`auth`, `fetchUsers`, `fetchToken`, `sendHeartbeat`, `sendOffline`) tek yerde toplayan repository katmanı. Her fonksiyon `Result<T>` döner (başarı/hata). |
+| `data/local/prefs/SessionPreferences.kt` | `SharedPreferences` üzerinden "giriş yapılmış mı", "beni hatırla" bilgisini saklar. |
+| `core/hardware/AudioManagerCompat.kt` | Hoparlör/kulaklık modu arasında geçiş yapar (`AudioManager.MODE_IN_COMMUNICATION`). |
+| `core/logging/Logger.kt` | `Log.d/e/i`'yi sarmalayan, tek bir `TAG` kullanan basit logger. |
+| `core/util/ImageUtils.kt` | Profil fotoğrafını `Bitmap` <-> `Base64 String` arasında çevirir (sunucuya JSON içinde göndermek için). |
+| `core/util/KeyboardUtils.kt` | Klavyeyi programatik olarak gizler. |
+| `core/util/PermissionUtils.kt` | Gereken izinlerin listesini (`RECORD_AUDIO`, `CAMERA`, `POST_NOTIFICATIONS`) döner ve hepsinin verilip verilmediğini kontrol eder. |
 | `model/CallToken.kt` | Basit bir `data class`: `token` ve `url` alanlarını tutar. |
 
 ---
@@ -363,11 +363,11 @@ CallService.kt
 Birine bu projeyi anlatırken önerilen sıra:
 
 1. **`model/CallToken.kt`** — en basit dosya, "token nedir" kavramını burada anlat.
-2. **`network/NetworkClient.kt` + `UserRepository.kt`** — HTTP katmanı, "istemci sunucuyla nasıl konuşur".
+2. **`data/remote/NetworkClient.kt` + `UserRepository.kt`** — HTTP katmanı, "istemci sunucuyla nasıl konuşur".
 3. **`livekit-token-server/index.js`** — sunucu tarafı, JWT'nin nasıl üretildiği.
-4. **`call/CallManager.kt`** — LiveKit'e bağlanmanın çekirdeği.
-5. **`encryption/EncryptionManager.kt`** — E2EE katmanı (bugün konuştuğumuz kısım).
-6. **`ui/MainActivity.kt`** — hepsinin birleştiği yer, en son ve en detaylı anlatılacak dosya.
+4. **`domain/call/CallManager.kt`** — LiveKit'e bağlanmanın çekirdeği.
+5. **`core/encryption/EncryptionManager.kt`** — E2EE katmanı (bugün konuştuğumuz kısım).
+6. **`ui/main/MainActivity.kt`** — hepsinin birleştiği yer, en son ve en detaylı anlatılacak dosya.
 7. **`MyFirebaseMessagingService.kt` + `IncomingCallActivity.kt`** — gelen arama akışı, bonus konu.
 
 ---

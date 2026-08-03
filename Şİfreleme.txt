@@ -1,0 +1,26 @@
+Uçtan Uca Şifreleme (E2EE) Çalışma Mekanizması
+
+Sistemimiz temelde Asimetrik Şifreleme (RSA) ve Simetrik Şifreleme (AES) mantığının bir arada kullanıldığı melez (hybrid) bir güvenlik altyapısı üzerine kuruludur. Süreç şu adımlarla ilerler:
+
+1. Güvenli Kasanın Oluşturulması (Anahtar Üretimi)
+- Kullanıcı uygulamayı kurup ilk kez giriş yaptığında, cihazın donanımsal güvenlik yongası olan Android Keystore içinde cihaza özel bir RSA anahtar çifti (Public ve Private Key) üretilir.
+- Private Key (Özel Anahtar): Asla cihazdan dışarı çıkmaz, sunucuya gönderilmez ve kod tarafından bile doğrudan okunamaz. Sadece şifre çözme emirlerini donanıma iletmek için kullanılır.
+- Public Key (Genel Anahtar): Herkesle paylaşılabilen, verileri kilitlemeye yarayan anahtardır. Kullanıcı giriş yaptığında bu anahtar Base64 formatında Node.js sunucusuna iletilip kaydedilir.
+
+2. Çağrının Başlatılması ve Anahtarın Kilitlenmesi
+- Arayan cihaz (örneğin Hackerju), LiveKit odası için tek seferlik, rastgele bir oda şifresi (Simetrik AES anahtarı) üretir. Bu şifre, görüntüyü ve sesi şifreleyecek olan asıl anahtardır.
+- Hackerju, aramak istediği kişinin (dogukan55) Public Key'ini sunucudan talep eder.
+- Hackerju'nun cihazı, ürettiği bu özel oda şifresini dogukan55'in Public Key'i ile kilitler (şifreler). Bu aşamadan sonra kilitlenen bu veriyi dünyada açabilecek tek şey, dogukan55'in cihazındaki Private Key'dir.
+
+3. Sunucunun Körlüğü (Sıfır Bilgi Prensibi)
+- Arayan cihaz, bu şifrelenmiş metni (344 karakterlik anlamsız veri yığınını) Node.js sunucusuna gönderir.
+- Merkezi sunucu, aradaki şifreleme algoritmasını veya asıl anahtarı bilmez. Gelen şifreli paketin içini okuyamaz, değiştiremez veya dinleyemez. 
+- Sunucu sadece bir kurye görevi görür ve bu şifreli paketi FCM (Firebase Cloud Messaging) bildirimi üzerinden alıcı cihaza iletir.
+
+4. Şifrenin Çözülmesi ve Güvenli Odaya Giriş
+- dogukan55'in cihazı, FCM üzerinden şifreli paketi alır.
+- Uygulama, gelen bu şifreli metni doğrudan Android Keystore'a gönderir ve "Bunu kendi Private Key'in ile çöz" emrini verir.
+- Şifre başarıyla çözüldüğünde, orijinal oda şifresi (AES anahtarı) elde edilir.
+- Her iki cihaz da aynı oda şifresine sahip olduğu için LiveKit altyapısına bağlanır. Artık aradaki tüm ses ve görüntü akışı, cihazlar arasında bu şifreyle kilitlenip açılır.
+
+Özetle: Bu yapı sayesinde, aracı sunucu ele geçirilse, veritabanı sızdırılsa veya ağ trafiği dinlense dahi, Private Key'ler fiziksel cihazların içinde kilitli kaldığı için görüşmelerin içeriğine kimse ulaşamaz.

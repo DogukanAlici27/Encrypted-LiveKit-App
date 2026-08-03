@@ -1,9 +1,9 @@
 package com.dogu.livekit.di
 
 import android.content.Context
-import com.dogu.livekit.data.AppDatabase
-import com.dogu.livekit.network.NetworkClient
-import com.dogu.livekit.pref.SessionPreferences
+import com.dogu.livekit.data.local.AppDatabase
+import com.dogu.livekit.data.remote.NetworkClient
+import com.dogu.livekit.data.local.prefs.SessionPreferences
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn

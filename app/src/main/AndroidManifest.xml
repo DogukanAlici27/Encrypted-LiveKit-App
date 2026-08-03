@@ -37,7 +37,7 @@
         android:theme="@style/Theme.LiveKit">
 
         <service
-            android:name=".MyFirebaseMessagingService"
+            android:name=".service.MyFirebaseMessagingService"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
@@ -45,13 +45,13 @@
         </service>
 
         <service
-            android:name=".call.CallService"
+            android:name=".service.CallService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="microphone|camera|phoneCall" />
 
         <activity
-            android:name=".ui.MainActivity"
+            android:name=".ui.main.MainActivity"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -62,7 +62,7 @@
         </activity>
 
         <activity
-            android:name=".ui.IncomingCallActivity"
+            android:name=".ui.call.IncomingCallActivity"
             android:exported="false"
             android:launchMode="singleInstance"
             android:showOnLockScreen="true"

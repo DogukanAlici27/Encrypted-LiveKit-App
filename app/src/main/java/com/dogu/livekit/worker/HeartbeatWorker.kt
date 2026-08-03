@@ -5,8 +5,8 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.dogu.livekit.data.repository.UserRepository
-import com.dogu.livekit.logging.Logger
-import com.dogu.livekit.pref.SessionPreferences
+import com.dogu.livekit.core.logging.Logger
+import com.dogu.livekit.data.local.prefs.SessionPreferences
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 

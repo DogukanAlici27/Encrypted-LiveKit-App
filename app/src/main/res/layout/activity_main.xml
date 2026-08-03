@@ -341,15 +341,11 @@
                             android:inputType="text" />
                     </com.google.android.material.textfield.TextInputLayout>
 
-                    <androidx.core.widget.NestedScrollView
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/contactsRecyclerView"
                         android:layout_width="match_parent"
-                        android:layout_height="match_parent">
-                        <LinearLayout
-                            android:id="@+id/dynamic_contacts_container"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="vertical" />
-                    </androidx.core.widget.NestedScrollView>
+                        android:layout_height="match_parent"
+                        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
                 </LinearLayout>
 
                 <!-- Geçmiş Paneli -->

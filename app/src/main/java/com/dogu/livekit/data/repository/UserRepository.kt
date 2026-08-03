@@ -1,10 +1,10 @@
 package com.dogu.livekit.data.repository
 
-import com.dogu.livekit.data.AppDatabase
-import com.dogu.livekit.data.entity.CallLogEntity
-import com.dogu.livekit.data.entity.UserEntity
-import com.dogu.livekit.network.NetworkClient
-import com.dogu.livekit.pref.SessionPreferences
+import com.dogu.livekit.data.local.AppDatabase
+import com.dogu.livekit.data.local.entity.CallLogEntity
+import com.dogu.livekit.data.local.entity.UserEntity
+import com.dogu.livekit.data.remote.NetworkClient
+import com.dogu.livekit.data.local.prefs.SessionPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -205,7 +205,7 @@ class UserRepository @Inject constructor(
 
     suspend fun sendHeartbeat(identity: String): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
-            val currentRoom = com.dogu.livekit.call.CallManager.room
+            val currentRoom = com.dogu.livekit.domain.call.CallManager.room
             val roomName = if (currentRoom != null && currentRoom.state == io.livekit.android.room.Room.State.CONNECTED) {
                 currentRoom.name
             } else {
