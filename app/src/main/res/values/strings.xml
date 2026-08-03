@@ -4,4 +4,5 @@
     <string name="guest">Misafir</string>
     <string name="permission_required">İzinler gerekli</string>
     <string name="loading">İşlem yapılıyor...</string>
+    <string name="message_selection_count">%d seçildi</string>
 </resources>

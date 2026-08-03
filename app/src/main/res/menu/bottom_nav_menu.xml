@@ -5,6 +5,10 @@
         android:title="Rehber"
         android:icon="@drawable/ic_people" />
     <item
+        android:id="@+id/nav_messages"
+        android:title="Mesajlar"
+        android:icon="@drawable/ic_chat" />
+    <item
         android:id="@+id/nav_history"
         android:title="Geçmiş"
         android:icon="@android:drawable/ic_menu_recent_history" />

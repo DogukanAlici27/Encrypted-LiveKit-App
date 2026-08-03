@@ -348,6 +348,31 @@
                         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
                 </LinearLayout>
 
+                <!-- Mesajlar Paneli -->
+                <LinearLayout
+                    android:id="@+id/messages_panel"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp"
+                        android:text="MESAJLAR"
+                        android:textColor="@color/text_gray"
+                        android:textSize="12sp"
+                        android:fontFamily="sans-serif-medium"
+                        android:letterSpacing="0.1" />
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/messagesRecyclerView"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+                </LinearLayout>
+
                 <!-- Geçmiş Paneli -->
                 <LinearLayout
                     android:id="@+id/history_panel"

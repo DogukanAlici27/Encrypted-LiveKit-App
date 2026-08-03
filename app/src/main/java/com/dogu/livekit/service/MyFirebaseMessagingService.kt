@@ -14,6 +14,7 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
 import com.dogu.livekit.data.repository.UserRepository
+import com.dogu.livekit.data.repository.MessageRepository
 import com.dogu.livekit.data.local.prefs.SessionPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +32,9 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     lateinit var userRepository: UserRepository
 
     @Inject
+    lateinit var messageRepository: MessageRepository
+
+    @Inject
     lateinit var sessionPreferences: SessionPreferences
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -41,6 +45,17 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
+
+        val type = remoteMessage.data["type"]
+        if (type == "CHAT_MESSAGE") {
+            handleChatMessage(remoteMessage)
+            return
+        }
+
+        if (type == "READ_RECEIPT") {
+            handleReadReceipt(remoteMessage)
+            return
+        }
 
         val caller = remoteMessage.data["caller"] ?: "Bilinmeyen"
         val room = remoteMessage.data["room"]
@@ -74,6 +89,65 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 processMessage(remoteMessage, caller, room, encryptedRoomKey, isVideo)
             }
         }
+    }
+
+    private fun handleChatMessage(remoteMessage: RemoteMessage) {
+        val sender = remoteMessage.data["sender"] ?: return
+        val content = remoteMessage.data["content"] ?: ""
+        val timestampStr = remoteMessage.data["timestamp"]
+        val timestamp = timestampStr?.toLongOrNull() ?: System.currentTimeMillis()
+
+        serviceScope.launch {
+            messageRepository.receiveMessage(sender, content, timestamp)
+            withContext(Dispatchers.Main) {
+                showChatNotification(sender, content)
+            }
+        }
+    }
+
+    private fun handleReadReceipt(remoteMessage: RemoteMessage) {
+        val reader = remoteMessage.data["reader"] ?: return
+        serviceScope.launch {
+            messageRepository.receiveReadReceipt(reader)
+        }
+    }
+
+    private fun showChatNotification(sender: String, content: String) {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channelId = "chat_messages_channel_v2"
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(channelId, "Mesajlar", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Yeni mesaj bildirimleri"
+                enableVibration(true)
+                setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI, null)
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val intent = Intent(this, com.dogu.livekit.ui.chat.ChatActivity::class.java).apply {
+            putExtra("recipient", sender)
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            this, sender.hashCode(), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setContentTitle(sender)
+            .setContentText(content)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setAutoCancel(true)
+            .setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI)
+            .setVibrate(longArrayOf(0, 250, 250, 250))
+            .setContentIntent(pendingIntent)
+            .build()
+
+        notificationManager.notify(sender.hashCode(), notification)
     }
 
     private fun processMessage(remoteMessage: RemoteMessage, caller: String, room: String?, encryptedRoomKey: String?, isVideo: Boolean) {

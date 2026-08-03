@@ -36,6 +36,7 @@ sealed class CallEvent {
     data class TrackRemoved(val identity: String) : CallEvent()
     data class TrackMuted(val identity: String, val isMuted: Boolean) : CallEvent()
     data class Connect(val url: String, val token: String, val useVideo: Boolean, val roomKey: String?) : CallEvent()
+    data class ChatMessage(val sender: String, val message: String) : CallEvent()
     object CallStarted : CallEvent()
     object CallEnded : CallEvent()
 }
@@ -237,6 +238,9 @@ class CallViewModel @Inject constructor(
                     } else {
                         _events.emit(CallEvent.Status("${message.substringAfter("LEFT_CALL:")} adlı kullanıcı ayrıldı"))
                     }
+                } else if (message.startsWith("CHAT:")) {
+                    val chatText = message.substringAfter("CHAT:")
+                    _events.emit(CallEvent.ChatMessage(participantName, chatText))
                 }
             }
             else -> {}
@@ -318,6 +322,15 @@ class CallViewModel @Inject constructor(
 
     fun stopHeartbeat() {
         heartbeatJob?.cancel()
+    }
+
+    fun refreshUsers() {
+        viewModelScope.launch {
+            val res = userRepository.fetchUsers()
+            if (res.isSuccess) {
+                userRepository.syncUsers(res.getOrThrow())
+            }
+        }
     }
 
     fun startAutoRefresh() {

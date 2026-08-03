@@ -16,4 +16,20 @@
 
     <color name="white">#FFFFFFFF</color>
     <color name="black">#FF000000</color>
+
+    <!-- WhatsApp inspired colors -->
+    <color name="wa_header">#075E54</color>
+    <color name="wa_header_light">#128C7E</color>
+    <color name="wa_bg">#E5DDD5</color>
+    <color name="wa_bubble_mine">#DCF8C6</color>
+    <color name="wa_bubble_other">#FFFFFF</color>
+    <color name="wa_text_time">#757575</color>
+    <color name="wa_status_blue">#34B7F1</color>
+
+    <!-- Modern Chat Colors -->
+    <color name="bubble_mine_start">#0088FF</color>
+    <color name="bubble_mine_end">#0066FF</color>
+    <color name="bubble_other">#F0F0F0</color>
+    <color name="chat_bg">#F8F9FA</color>
+    <color name="chat_header">#FFFFFF</color>
 </resources>

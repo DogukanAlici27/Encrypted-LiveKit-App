@@ -18,6 +18,9 @@ interface UserDao {
     @Query("SELECT * FROM users WHERE identity = :identity LIMIT 1")
     suspend fun getUser(identity: String): UserEntity?
 
+    @Query("SELECT * FROM users WHERE identity = :identity LIMIT 1")
+    fun getUserFlow(identity: String): Flow<UserEntity?>
+
     @Query("SELECT * FROM users WHERE needsSync = 1")
     suspend fun getUnsyncedUsers(): List<UserEntity>
 

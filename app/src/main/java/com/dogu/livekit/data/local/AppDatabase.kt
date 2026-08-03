@@ -5,14 +5,17 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.dogu.livekit.data.local.dao.CallLogDao
+import com.dogu.livekit.data.local.dao.MessageDao
 import com.dogu.livekit.data.local.dao.UserDao
 import com.dogu.livekit.data.local.entity.CallLogEntity
+import com.dogu.livekit.data.local.entity.MessageEntity
 import com.dogu.livekit.data.local.entity.UserEntity
 
-@Database(entities = [UserEntity::class, CallLogEntity::class], version = 3, exportSchema = false)
+@Database(entities = [UserEntity::class, CallLogEntity::class, MessageEntity::class], version = 5, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
     abstract fun callLogDao(): CallLogDao
+    abstract fun messageDao(): MessageDao
 
     companion object {
         @Volatile

@@ -346,6 +346,88 @@ app.get('/token', async (req, res) => {
  
  
  
+// -------------------------------------------------------------------
+// MESAJLAŞMA ENDPOINTLERİ
+// -------------------------------------------------------------------
+
+app.post('/send-message', (req, res) => {
+  const { sender, recipient, content } = req.body;
+
+  if (!sender || !recipient || !content) {
+    return res.status(400).send("Eksik parametre.");
+  }
+
+  if (!users[recipient]) {
+    return res.status(404).send("Alıcı bulunamadı.");
+  }
+
+  const recipientToken = users[recipient].fcmToken;
+  if (!recipientToken) {
+    return res.status(404).send("Alıcının bildirim token'ı yok.");
+  }
+
+  if (firebaseReady) {
+    admin.messaging().send({
+      data: {
+        type: "CHAT_MESSAGE",
+        sender: sender,
+        content: content,
+        timestamp: Date.now().toString()
+      },
+      token: recipientToken,
+      android: {
+        priority: 'high'
+      }
+    }).then(() => {
+      console.log(`Mesaj gönderildi: ${sender} -> ${recipient}`);
+      res.json({ success: true });
+    }).catch(e => {
+      console.error(`Mesaj iletim hatası:`, e);
+      res.status(500).send("Mesaj iletilemedi.");
+    });
+  } else {
+    res.status(503).send("Firebase hazır değil.");
+  }
+});
+
+app.post('/mark-read', (req, res) => {
+  const { me, sender } = req.body;
+
+  if (!me || !sender) {
+    return res.status(400).send("Eksik parametre.");
+  }
+
+  if (!users[sender]) {
+    return res.status(404).send("Gönderen bulunamadı.");
+  }
+
+  const senderToken = users[sender].fcmToken;
+  if (!senderToken) {
+    return res.sendStatus(200);
+  }
+
+  if (firebaseReady) {
+    admin.messaging().send({
+      data: {
+        type: "READ_RECEIPT",
+        reader: me
+      },
+      token: senderToken,
+      android: {
+        priority: 'high'
+      }
+    }).then(() => {
+      console.log(`Okundu Sinyali: ${me} -> ${sender} (Okundu)`);
+      res.json({ success: true });
+    }).catch(e => {
+      console.error(`Okundu sinyali iletim hatası:`, e);
+      res.status(500).send("Sinyal iletilemedi.");
+    });
+  } else {
+    res.status(503).send("Firebase hazır değil.");
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 TEST MODU: http://0.0.0.0:${PORT} adresinde aktif.`);
 });

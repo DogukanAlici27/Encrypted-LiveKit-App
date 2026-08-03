@@ -91,6 +91,10 @@ class UserRepository @Inject constructor(
         db.userDao().getUser(identity)
     }
 
+    fun getLocalUserFlow(identity: String): Flow<UserEntity?> {
+        return db.userDao().getUserFlow(identity)
+    }
+
     suspend fun saveCallLog(target: String, type: String) = withContext(Dispatchers.IO) {
         val log = CallLogEntity(target = target, type = type)
         db.callLogDao().insertLog(log)

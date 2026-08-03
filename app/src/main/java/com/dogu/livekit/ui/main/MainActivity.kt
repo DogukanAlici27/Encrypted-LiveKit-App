@@ -30,6 +30,8 @@ import com.dogu.livekit.ui.auth.AuthViewModel
 import com.dogu.livekit.ui.call.CallEvent
 import com.dogu.livekit.ui.call.CallViewModel
 import com.dogu.livekit.ui.call.VideoAdapter
+import com.dogu.livekit.ui.chat.ChatActivity
+import com.dogu.livekit.ui.chat.ChatViewModel
 import com.dogu.livekit.ui.contacts.ContactsViewModel
 import com.dogu.livekit.ui.history.HistoryViewModel
 import com.google.android.material.bottomnavigation.BottomNavigationView
@@ -50,10 +52,12 @@ class MainActivity : AppCompatActivity() {
     private val contactsViewModel: ContactsViewModel by viewModels()
     private val callViewModel: CallViewModel by viewModels()
     private val historyViewModel: HistoryViewModel by viewModels()
+    private val chatViewModel: ChatViewModel by viewModels()
 
     @Inject
     lateinit var sessionPreferences: SessionPreferences
 
+    private lateinit var messageListAdapter: MessageListAdapter
     private val historyAdapter = CallLogAdapter()
     private val contactsAdapter = ContactsAdapter(
         onCallClick = { user -> startCall(user.identity) },
@@ -62,7 +66,8 @@ class MainActivity : AppCompatActivity() {
             if (isChecked) selectedParticipants.add(user.identity)
             else selectedParticipants.remove(user.identity)
             updateGroupCallFab()
-        }
+        },
+        onChatClick = { user -> openChat(user.identity) }
     )
 
     private var isAppOffline: Boolean = false
@@ -134,6 +139,28 @@ class MainActivity : AppCompatActivity() {
         observeAuthState()
         observeContacts()
         observeCall()
+        observeMessages()
+    }
+
+    private fun observeMessages() {
+        lifecycleScope.launch {
+            chatViewModel.getLastMessages().collect { messages ->
+                messageListAdapter.submitList(messages)
+            }
+        }
+
+        lifecycleScope.launch {
+            contactsViewModel.contacts.collect { users ->
+                messageListAdapter.setUserData(users)
+            }
+        }
+    }
+
+    private fun openChat(identity: String) {
+        val intent = Intent(this, ChatActivity::class.java).apply {
+            putExtra("recipient", identity)
+        }
+        startActivity(intent)
     }
 
     private fun observeAuthState() {
@@ -393,6 +420,10 @@ class MainActivity : AppCompatActivity() {
 
         binding.contactsRecyclerView.adapter = contactsAdapter
 
+        val myId = sessionPreferences.getCurrentIdentity() ?: ""
+        messageListAdapter = MessageListAdapter(myId) { identity -> openChat(identity) }
+        binding.messagesRecyclerView.adapter = messageListAdapter
+
         binding.remoteVideosRecyclerView.apply {
             layoutManager = GridLayoutManager(this@MainActivity, 2).apply {
                 spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
@@ -499,6 +530,10 @@ class MainActivity : AppCompatActivity() {
                     refreshContacts()
                     true
                 }
+                R.id.nav_messages -> {
+                    showPanel(binding.messagesPanel)
+                    true
+                }
                 R.id.nav_history -> {
                     showPanel(binding.historyPanel)
                     true
@@ -519,6 +554,7 @@ class MainActivity : AppCompatActivity() {
     private fun showPanel(panel: View) {
         binding.homePanel.visibility = View.GONE
         binding.contactsPanel.visibility = View.GONE
+        binding.messagesPanel.visibility = View.GONE
         binding.historyPanel.visibility = View.GONE
         binding.profilePanel.visibility = View.GONE
         panel.visibility = View.VISIBLE

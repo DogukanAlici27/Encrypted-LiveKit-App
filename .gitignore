@@ -21,3 +21,4 @@ livekit-token-server/node_modules/
 node_modules/
 .env
 serviceAccountKey.json
+.artifacts/

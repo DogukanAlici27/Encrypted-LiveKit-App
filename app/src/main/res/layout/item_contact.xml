@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginBottom="12dp"
@@ -78,6 +79,18 @@
             </LinearLayout>
         </LinearLayout>
 
+        <TextView
+            android:id="@+id/lastSeenText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_gray"
+            android:textSize="10sp"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:text="14:20"
+            tools:visibility="visible" />
+
         <com.google.android.material.checkbox.MaterialCheckBox
             android:id="@+id/contactSelectCb"
             android:layout_width="wrap_content"
@@ -89,6 +102,24 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"
             android:layout_marginEnd="4dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/contactChatBtn"
+            style="@style/Widget.MaterialComponents.Button.Icon"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
+            app:icon="@android:drawable/stat_notify_chat"
+            app:iconTint="@color/accent_blue"
+            app:backgroundTint="@color/bg_input"
+            app:cornerRadius="20dp"
+            app:layout_constraintEnd_toStartOf="@id/contactCallBtn"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            android:layout_marginEnd="8dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/contactCallBtn"

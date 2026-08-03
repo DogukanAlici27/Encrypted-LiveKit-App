@@ -19,7 +19,8 @@ import com.google.android.material.button.MaterialButton
 class ContactsAdapter(
     private val onCallClick: (UserEntity) -> Unit,
     private val onBlockClick: (UserEntity) -> Unit,
-    private val onSelectionChanged: (UserEntity, Boolean) -> Unit
+    private val onSelectionChanged: (UserEntity, Boolean) -> Unit,
+    private val onChatClick: (UserEntity) -> Unit
 ) : ListAdapter<UserEntity, ContactsAdapter.ContactViewHolder>(UserDiffCallback()) {
 
     var isOffline: Boolean = false
@@ -30,6 +31,7 @@ class ContactsAdapter(
         val statusDot: View = view.findViewById(R.id.statusDot)
         val statusTv: TextView = view.findViewById(R.id.contactStatus)
         val selectCb: CheckBox = view.findViewById(R.id.contactSelectCb)
+        val chatBtn: MaterialButton = view.findViewById(R.id.contactChatBtn)
         val callBtn: MaterialButton = view.findViewById(R.id.contactCallBtn)
 
         fun bind(user: UserEntity) {
@@ -86,6 +88,7 @@ class ContactsAdapter(
             callBtn.alpha = if (!canCall) 0.5f else 1f
 
             callBtn.setOnClickListener { onCallClick(user) }
+            chatBtn.setOnClickListener { onChatClick(user) }
             itemView.setOnLongClickListener {
                 onBlockClick(user)
                 true
