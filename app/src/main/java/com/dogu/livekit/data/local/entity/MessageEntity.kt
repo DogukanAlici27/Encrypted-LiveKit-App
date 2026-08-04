@@ -10,6 +10,7 @@ data class MessageEntity(
     val remoteId: String? = null,
     val sender: String,
     val recipient: String,
+    val groupId: String? = null,
     val content: String,
     val timestamp: Long,
     val isMine: Boolean,

@@ -65,12 +65,22 @@ class ChatAdapter(
     inner class MessageViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         private val messageText: TextView = view.findViewById(R.id.messageText)
         private val timeText: TextView = view.findViewById(R.id.timeText)
+        private val senderNameText: TextView? = view.findViewById(R.id.senderNameText)
         private val statusIcon: ImageView? = view.findViewById(R.id.statusIcon)
         private val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
 
         fun bind(message: MessageEntity, isSelected: Boolean) {
             messageText.text = message.content
             timeText.text = sdf.format(Date(message.timestamp))
+
+            if (senderNameText != null) {
+                if (message.groupId != null && !message.isMine) {
+                    senderNameText.visibility = View.VISIBLE
+                    senderNameText.text = message.sender
+                } else {
+                    senderNameText.visibility = View.GONE
+                }
+            }
             
             itemView.setBackgroundColor(
                 if (isSelected) ContextCompat.getColor(itemView.context, R.color.accent_blue_alpha)

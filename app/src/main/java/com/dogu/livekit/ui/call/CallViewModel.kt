@@ -62,6 +62,9 @@ class CallViewModel @Inject constructor(
     private val _events = MutableSharedFlow<CallEvent>()
     val events = _events.asSharedFlow()
 
+    private val _isOnline = MutableStateFlow(true)
+    val isOnline = _isOnline.asStateFlow()
+
     private val _profilePhoto = MutableStateFlow<Bitmap?>(null)
     val profilePhoto = _profilePhoto.asStateFlow()
 
@@ -309,15 +312,22 @@ class CallViewModel @Inject constructor(
                 val identity = sessionPreferences.getCurrentIdentity()
                 if (identity != null) {
                     val res = userRepository.sendHeartbeat(identity)
-                    if (res.isSuccess) heartbeatFailCount = 0
-                    else {
+                    if (res.isSuccess) {
+                        heartbeatFailCount = 0
+                        _isOnline.value = true
+                    } else {
                         heartbeatFailCount++
+                        _isOnline.value = false
                         if (heartbeatFailCount >= 3) _events.emit(CallEvent.Status("Bağlantı zayıf...", 3000))
                     }
                 }
                 delay(30.seconds)
             }
         }
+    }
+
+    fun triggerImmediateHeartbeat() {
+        startHeartbeat()
     }
 
     fun stopHeartbeat() {

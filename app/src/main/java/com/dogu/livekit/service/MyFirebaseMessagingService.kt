@@ -35,6 +35,9 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     lateinit var messageRepository: MessageRepository
 
     @Inject
+    lateinit var groupRepository: com.dogu.livekit.data.repository.GroupRepository
+
+    @Inject
     lateinit var sessionPreferences: SessionPreferences
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -49,6 +52,11 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val type = remoteMessage.data["type"]
         if (type == "CHAT_MESSAGE") {
             handleChatMessage(remoteMessage)
+            return
+        }
+
+        if (type == "GROUP_CHAT_MESSAGE") {
+            handleGroupChatMessage(remoteMessage)
             return
         }
 
@@ -108,6 +116,64 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 showChatNotification(sender, content)
             }
         }
+    }
+
+    private fun handleGroupChatMessage(remoteMessage: RemoteMessage) {
+        val sender = remoteMessage.data["sender"] ?: return
+        val groupId = remoteMessage.data["groupId"] ?: return
+        val groupName = remoteMessage.data["groupName"] ?: "Grup"
+        val content = remoteMessage.data["content"] ?: ""
+        val timestampStr = remoteMessage.data["timestamp"]
+        val timestamp = timestampStr?.toLongOrNull() ?: System.currentTimeMillis()
+
+        serviceScope.launch {
+            // Önce grubu yerelde kontrol et/oluştur
+            val existingGroup = groupRepository.getGroup(groupId)
+            if (existingGroup == null) {
+                val newGroup = com.dogu.livekit.data.local.entity.GroupEntity(
+                    id = groupId,
+                    name = groupName,
+                    owner = "", // Bilmiyoruz, önemli değil
+                    members = "" // Bilmiyoruz, önemli değil
+                )
+                groupRepository.saveGroup(newGroup)
+            }
+
+            messageRepository.receiveMessage(sender, content, timestamp, groupId)
+            
+            withContext(Dispatchers.Main) {
+                showGroupChatNotification(groupId, groupName, sender, content)
+            }
+        }
+    }
+
+    private fun showGroupChatNotification(groupId: String, groupName: String, sender: String, content: String) {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channelId = "chat_messages_channel_v2"
+
+        val intent = Intent(this, com.dogu.livekit.ui.chat.ChatActivity::class.java).apply {
+            putExtra("groupId", groupId)
+            putExtra("groupName", groupName)
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            this, groupId.hashCode(), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setContentTitle(groupName)
+            .setContentText("$sender: $content")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setAutoCancel(true)
+            .setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        notificationManager.notify(groupId.hashCode(), notification)
     }
 
     private fun handleReadReceipt(remoteMessage: RemoteMessage) {

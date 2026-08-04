@@ -24,6 +24,10 @@ class MessageRepository @Inject constructor(
         return db.messageDao().getChatMessages(me, user)
     }
 
+    fun getGroupMessages(groupId: String): Flow<List<MessageEntity>> {
+        return db.messageDao().getGroupMessages(groupId)
+    }
+
     suspend fun sendMessage(recipient: String, text: String): Result<Boolean> = withContext(Dispatchers.IO) {
         val me = sessionPreferences.getCurrentIdentity() ?: return@withContext Result.failure(Exception("Not logged in"))
         
@@ -54,16 +58,52 @@ class MessageRepository @Inject constructor(
         }
     }
 
-    suspend fun receiveMessage(sender: String, content: String, timestamp: Long) = withContext(Dispatchers.IO) {
+    suspend fun sendGroupMessage(groupId: String, text: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        val me = sessionPreferences.getCurrentIdentity() ?: return@withContext Result.failure(Exception("Not logged in"))
+        
+        // 1. Yerel DB'ye kaydet
+        val message = MessageEntity(
+            sender = me,
+            recipient = "", // Grup mesajında recipient boş olabilir veya groupId olabilir
+            groupId = groupId,
+            content = text,
+            timestamp = System.currentTimeMillis(),
+            isMine = true
+        )
+        db.messageDao().insertMessage(message)
+        db.groupDao().updateLastMessage(groupId, text, System.currentTimeMillis())
+
+        // 2. Sunucuya gönder
+        try {
+            val json = JSONObject().apply {
+                put("groupId", groupId)
+                put("sender", me)
+                put("content", text)
+            }
+            val request = NetworkClient.createPostRequest("/send-group-message", json)
+            httpClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) Result.success(true)
+                else Result.failure(IOException("Server error: ${response.code}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun receiveMessage(sender: String, content: String, timestamp: Long, groupId: String? = null) = withContext(Dispatchers.IO) {
         val me = sessionPreferences.getCurrentIdentity() ?: return@withContext
         val message = MessageEntity(
             sender = sender,
-            recipient = me,
+            recipient = if (groupId != null) "" else me,
+            groupId = groupId,
             content = content,
             timestamp = timestamp,
             isMine = false
         )
         db.messageDao().insertMessage(message)
+        if (groupId != null) {
+            db.groupDao().updateLastMessage(groupId, content, timestamp)
+        }
     }
 
     fun getLastMessages(): Flow<List<MessageEntity>> {
@@ -87,6 +127,11 @@ class MessageRepository @Inject constructor(
         } catch (e: Exception) {
             // Sessizce geç
         }
+    }
+
+    suspend fun markGroupAsRead(groupId: String) = withContext(Dispatchers.IO) {
+        val me = sessionPreferences.getCurrentIdentity() ?: return@withContext
+        db.messageDao().markGroupAsRead(groupId, me)
     }
 
     suspend fun receiveReadReceipt(otherParty: String) = withContext(Dispatchers.IO) {

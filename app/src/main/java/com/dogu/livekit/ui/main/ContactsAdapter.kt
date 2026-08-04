@@ -20,7 +20,9 @@ class ContactsAdapter(
     private val onCallClick: (UserEntity) -> Unit,
     private val onLongClick: (UserEntity) -> Unit,
     private val onSelectionChanged: (UserEntity, Boolean) -> Unit,
-    private val onChatClick: (UserEntity) -> Unit
+    private val onChatClick: (UserEntity) -> Unit,
+    private val isSelected: (String) -> Boolean,
+    private val showSelection: Boolean = true // Yeni: Seçim modunu aç/kapat
 ) : ListAdapter<UserEntity, ContactsAdapter.ContactViewHolder>(UserDiffCallback()) {
 
     var isOffline: Boolean = false
@@ -70,11 +72,32 @@ class ContactsAdapter(
             }
             statusTv.setTextColor(statusDot.backgroundTintList!!.defaultColor)
 
-            selectCb.isEnabled = !isInCall
-            selectCb.setOnCheckedChangeListener(null)
-            selectCb.isChecked = false // Reset state for recycling
-            selectCb.setOnCheckedChangeListener { _, isChecked ->
-                onSelectionChanged(user, isChecked)
+            if (showSelection) {
+                selectCb.visibility = View.VISIBLE
+                chatBtn.visibility = View.GONE
+                callBtn.visibility = View.GONE
+                
+                selectCb.isEnabled = !isInCall
+                selectCb.setOnCheckedChangeListener(null)
+                selectCb.isChecked = isSelected(user.identity)
+                selectCb.setOnCheckedChangeListener { _, isChecked ->
+                    onSelectionChanged(user, isChecked)
+                }
+
+                val toggleSelection = {
+                    if (!isInCall) {
+                        selectCb.isChecked = !selectCb.isChecked
+                    }
+                }
+                avatarImg.setOnClickListener { toggleSelection() }
+                itemView.findViewById<View>(R.id.textContainer).setOnClickListener { toggleSelection() }
+            } else {
+                selectCb.visibility = View.GONE
+                chatBtn.visibility = View.VISIBLE
+                callBtn.visibility = View.VISIBLE
+                
+                avatarImg.setOnClickListener { /* Normal tık */ }
+                itemView.findViewById<View>(R.id.textContainer).setOnClickListener { /* Normal tık */ }
             }
 
             val canCall = !isInCall && !isOffline

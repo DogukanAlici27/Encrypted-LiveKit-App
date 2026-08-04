@@ -1,6 +1,7 @@
 package com.dogu.livekit.ui.main
 
 import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
@@ -17,6 +18,8 @@ import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.dogu.livekit.R
 import com.dogu.livekit.core.hardware.AudioManagerCompat
 import com.dogu.livekit.core.logging.Logger
@@ -43,6 +46,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.milliseconds
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkRequest
 import androidx.recyclerview.widget.RecyclerView
 
 @AndroidEntryPoint
@@ -58,23 +64,34 @@ class MainActivity : AppCompatActivity() {
     @Inject
     lateinit var sessionPreferences: SessionPreferences
 
+    @Inject
+    lateinit var userRepository: com.dogu.livekit.data.repository.UserRepository
+
     private lateinit var messageListAdapter: MessageListAdapter
     private val historyAdapter = CallLogAdapter()
     private val contactsAdapter = ContactsAdapter(
         onCallClick = { user -> startCall(user.identity) },
         onLongClick = { user -> showBlockUserDialog(user.identity) },
-        onSelectionChanged = { user, isChecked ->
-            if (isChecked) selectedParticipants.add(user.identity)
-            else selectedParticipants.remove(user.identity)
-            updateGroupCallFab()
-        },
-        onChatClick = { user -> openChat(user.identity) }
+        onSelectionChanged = { _, _ -> },
+        onChatClick = { user -> openChat(user.identity) },
+        isSelected = { false },
+        showSelection = false // Ana listede checkbox'ları gizle
     )
 
     private var isAppOffline: Boolean = false
     private val selectedParticipants = mutableSetOf<String>()
     private var controlsHideJob: kotlinx.coroutines.Job? = null
     private val videoAdapter = VideoAdapter()
+
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            runOnUiThread {
+                if (sessionPreferences.isLoggedIn()) {
+                    callViewModel.triggerImmediateHeartbeat()
+                }
+            }
+        }
+    }
 
     private val requestPermissionLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
@@ -124,6 +141,7 @@ class MainActivity : AppCompatActivity() {
 
             bindUI()
             observeViewModel()
+            observeSyncStatus()
             loadSession()
             checkAndRequestPermissions()
             handleIntent(intent)
@@ -153,6 +171,12 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             contactsViewModel.contacts.collect { users ->
                 messageListAdapter.setUserData(users)
+            }
+        }
+
+        lifecycleScope.launch {
+            chatViewModel.getAllGroups().collect { groups ->
+                messageListAdapter.setGroupData(groups)
             }
         }
     }
@@ -254,6 +278,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun observeCall() {
+        lifecycleScope.launch {
+            callViewModel.isOnline.collect { online ->
+                updateConnectionStatusBadge(online)
+                if (online) {
+                    userRepository.scheduleDataSync()
+                }
+            }
+        }
+
         lifecycleScope.launch {
             callViewModel.isMicMuted.collect { muted ->
                 binding.muteButton.apply {
@@ -373,6 +406,9 @@ class MainActivity : AppCompatActivity() {
                 contactsViewModel.refreshContacts()
                 contactsViewModel.syncBlocksFromServer()
                 callViewModel.loadOwnProfilePhoto()
+                
+                userRepository.scheduleDataSync()
+                
                 Logger.d("✅ Initial sync tamamlandı")
             } catch (e: Exception) {
                 Logger.e("❌ Initial sync hatası", e)
@@ -404,6 +440,15 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+
+        if (intent?.getBooleanExtra("action_start_call", false) == true) {
+            val target = intent.getStringExtra("target")
+            val isVideo = intent.getBooleanExtra("is_video", true)
+            intent.putExtra("action_start_call", false)
+            if (!target.isNullOrEmpty()) {
+                callViewModel.startCall(target, isVideo)
+            }
+        }
     }
 
     private fun bindUI() {
@@ -425,6 +470,7 @@ class MainActivity : AppCompatActivity() {
         messageListAdapter = MessageListAdapter(
             myId,
             onChatClick = { identity -> openChat(identity) },
+            onGroupChatClick = { groupId, groupName -> openGroupChat(groupId, groupName) },
             onLongClick = { identity, isMuted -> showConversationOptionsDialog(identity, isMuted) }
         )
         binding.messagesRecyclerView.adapter = messageListAdapter
@@ -502,6 +548,7 @@ class MainActivity : AppCompatActivity() {
         binding.changePasswordButton.setOnClickListener { showChangePasswordDialog() }
         binding.deleteAccountButton.setOnClickListener { confirmAccountDeletion() }
         binding.groupCallFab.setOnClickListener { startGroupCall() }
+        binding.btnNewGroupHeader.setOnClickListener { showSelectContactsDialog() }
     }
 
     private fun setupSearch() {
@@ -530,6 +577,15 @@ class MainActivity : AppCompatActivity() {
                 return@setOnItemSelectedListener false
             }
 
+            // FAB'ları gizle (varsayılan)
+            binding.groupCallFab.hide()
+            binding.btnNewGroupHeader.visibility = View.GONE
+            
+            // Sekme geçişinde hızlıca bağlantı kontrolü yap
+            if (sessionPreferences.isLoggedIn()) {
+                callViewModel.triggerImmediateHeartbeat()
+            }
+
             when (item.itemId) {
                 R.id.nav_contacts -> {
                     showPanel(binding.contactsPanel)
@@ -538,6 +594,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 R.id.nav_messages -> {
                     showPanel(binding.messagesPanel)
+                    binding.btnNewGroupHeader.visibility = View.VISIBLE
                     true
                 }
                 R.id.nav_history -> {
@@ -704,6 +761,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun observeSyncStatus() {
+        WorkManager.getInstance(this).getWorkInfosForUniqueWorkLiveData("data_push_work")
+            .observe(this) { infos ->
+                val isSyncing = infos?.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING } ?: false
+                binding.syncStatusIcon.visibility = if (isSyncing) View.VISIBLE else View.GONE
+                if (isSyncing) {
+                    binding.syncStatusIcon.animate().rotationBy(360f).setDuration(1000).start()
+                }
+            }
+    }
+
     private fun showContactOptionsDialog(user: UserEntity) {
         val options = arrayOf(
             if (user.isBlocked) "Engeli Kaldır" else "Engelle",
@@ -851,6 +919,118 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showSelectContactsDialog() {
+        val dialog = BottomSheetDialog(this, R.style.TransparentBottomSheetDialogTheme)
+        val view = layoutInflater.inflate(R.layout.dialog_select_contacts, null)
+        dialog.setContentView(view)
+
+        val recyclerView = view.findViewById<RecyclerView>(R.id.contactsRecyclerView)
+        val searchEt = view.findViewById<EditText>(R.id.searchEditText)
+        val btnContinue = view.findViewById<Button>(R.id.btnContinue)
+
+        val localSelected = mutableSetOf<String>()
+        
+        val adapter = ContactsAdapter(
+            onCallClick = {},
+            onLongClick = {},
+            onChatClick = {},
+            onSelectionChanged = { user, isChecked ->
+                if (isChecked) localSelected.add(user.identity)
+                else localSelected.remove(user.identity)
+                btnContinue.isEnabled = localSelected.isNotEmpty()
+                btnContinue.alpha = if (localSelected.isNotEmpty()) 1.0f else 0.5f
+            },
+            isSelected = { identity -> localSelected.contains(identity) }
+        )
+        recyclerView.adapter = adapter
+        
+        btnContinue.isEnabled = false
+        btnContinue.alpha = 0.5f
+
+        // Verileri hemen yükle
+        val myIdentity = sessionPreferences.getCurrentIdentity()?.lowercase() ?: ""
+        val allContacts = contactsViewModel.contacts.value
+        val initialFiltered = allContacts.filter { it.identity.lowercase() != myIdentity && !it.isBlocked }
+        adapter.submitList(initialFiltered)
+
+        lifecycleScope.launch {
+            contactsViewModel.contacts.collect { contacts ->
+                val filtered = contacts.filter { it.identity.lowercase() != myIdentity && !it.isBlocked }
+                adapter.submitList(filtered)
+            }
+        }
+
+        searchEt.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val query = s?.toString()?.lowercase()?.trim() ?: ""
+                val filtered = contactsViewModel.contacts.value.filter { 
+                    it.identity.lowercase() != myIdentity && 
+                    !it.isBlocked &&
+                    (query.isEmpty() || it.identity.lowercase().contains(query))
+                }
+                adapter.submitList(filtered)
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+
+        btnContinue.setOnClickListener {
+            if (localSelected.size < 2) {
+                Toast.makeText(this, "Grup oluşturmak için en az 2 katılımcı seçmelisiniz", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            dialog.dismiss()
+            selectedParticipants.clear()
+            selectedParticipants.addAll(localSelected)
+            startGroupChat()
+        }
+
+        dialog.show()
+    }
+
+    private fun startGroupChat() {
+        if (selectedParticipants.isEmpty()) return
+        
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .create()
+        val view = layoutInflater.inflate(R.layout.dialog_create_group, null)
+        dialog.setView(view)
+        
+        val nameEt = view.findViewById<EditText>(R.id.groupNameEt)
+        
+        view.findViewById<View>(R.id.btnCreate).setOnClickListener {
+            val name = nameEt.text.toString().trim()
+            if (name.isEmpty()) {
+                Toast.makeText(this, "Grup ismi boş olamaz", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            
+            val members = selectedParticipants.toList()
+            chatViewModel.createGroup(name, members) { result ->
+                result.onSuccess { groupId ->
+                    selectedParticipants.clear()
+                    updateGroupCallFab()
+                    openGroupChat(groupId, name)
+                    dialog.dismiss()
+                }.onFailure {
+                    Toast.makeText(this, "Grup oluşturulamadı: ${it.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        
+        view.findViewById<View>(R.id.btnCancel).setOnClickListener { dialog.dismiss() }
+        dialog.show()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+    }
+
+    private fun openGroupChat(groupId: String, groupName: String) {
+        val intent = Intent(this, ChatActivity::class.java).apply {
+            putExtra("groupId", groupId)
+            putExtra("groupName", groupName)
+        }
+        startActivity(intent)
+    }
+
     private fun startGroupCall() {
         if (selectedParticipants.isEmpty()) return
         val targets = selectedParticipants.joinToString(",")
@@ -972,6 +1152,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        connectivityManager.registerNetworkCallback(NetworkRequest.Builder().build(), networkCallback)
+
         if (sessionPreferences.isLoggedIn()) {
             callViewModel.startHeartbeat()
             callViewModel.startAutoRefresh()
@@ -980,6 +1164,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        connectivityManager.unregisterNetworkCallback(networkCallback)
+        
         callViewModel.stopHeartbeat()
     }
 

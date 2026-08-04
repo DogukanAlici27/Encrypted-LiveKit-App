@@ -23,7 +23,8 @@ const PORT = 3005;
  
 const users = {};
 const activeRooms = {};
- 
+const groups = {}; // Yeni: Grupları saklamak için
+
 const ONLINE_THRESHOLD_MS = 40000;
  
 const isUserOnline = (identity) => {
@@ -63,13 +64,17 @@ app.post('/register', (req, res) => {
  
 app.post('/login', (req, res) => {
   const { identity, password, fcmToken, publicKey } = req.body;
- 
+
   if (isUserOnline(identity)) {
     console.log(`Giriş Reddedildi: ${identity} zaten başka bir cihazda aktif.`);
     return res.status(403).send("Bu hesap şu an başka bir cihazda aktif.");
   }
- 
+
   if (users[identity]) {
+    if (users[identity].password !== password) {
+      console.log(`Giriş Reddedildi: ${identity} için şifre hatalı.`);
+      return res.status(401).send("Şifre hatalı.");
+    }
     users[identity].fcmToken = fcmToken;
     users[identity].lastSeen = Date.now();
     users[identity].currentRoom = null;
@@ -349,6 +354,67 @@ app.get('/token', async (req, res) => {
 // -------------------------------------------------------------------
 // MESAJLAŞMA ENDPOINTLERİ
 // -------------------------------------------------------------------
+
+app.post('/create-group', (req, res) => {
+  const { name, members, owner } = req.body;
+  if (!name || !members || !Array.isArray(members) || !owner) {
+    return res.status(400).send("Eksik parametre.");
+  }
+
+  const groupId = `GROUP_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+  groups[groupId] = {
+    id: groupId,
+    name: name,
+    members: members, // members listesinde owner da olmalı
+    owner: owner
+  };
+
+  console.log(`Grup Oluşturuldu: ${name} (${groupId}) - Üyeler: ${members.join(', ')}`);
+  res.json({ groupId: groupId });
+});
+
+app.post('/send-group-message', (req, res) => {
+  const { groupId, sender, content } = req.body;
+
+  if (!groupId || !sender || !content) {
+    return res.status(400).send("Eksik parametre.");
+  }
+
+  const group = groups[groupId];
+  if (!group) {
+    return res.status(404).send("Grup bulunamadı.");
+  }
+
+  if (firebaseReady) {
+    const promises = group.members
+      .filter(m => m !== sender) // Gönderen hariç herkese gönder
+      .map(memberId => {
+        const member = users[memberId];
+        if (member && member.fcmToken) {
+          return admin.messaging().send({
+            data: {
+              type: "GROUP_CHAT_MESSAGE",
+              groupId: groupId,
+              groupName: group.name,
+              sender: sender,
+              content: content,
+              timestamp: Date.now().toString()
+            },
+            token: member.fcmToken,
+            android: { priority: 'high' }
+          }).catch(e => console.error(`${memberId} için FCM hatası:`, e.message));
+        }
+        return Promise.resolve();
+      });
+
+    Promise.all(promises).then(() => {
+      console.log(`Grup Mesajı: ${sender} -> ${group.name} (${groupId})`);
+      res.json({ success: true });
+    });
+  } else {
+    res.status(503).send("Firebase hazır değil.");
+  }
+});
 
 app.post('/send-message', (req, res) => {
   const { sender, recipient, content } = req.body;

@@ -6,7 +6,7 @@ import androidx.work.Configuration
 import io.livekit.android.LiveKit
 import androidx.work.*
 import com.dogu.livekit.worker.HeartbeatWorker
-import com.dogu.livekit.worker.UserSyncWorker
+import com.dogu.livekit.worker.DataSyncWorker
 import java.util.concurrent.TimeUnit
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
@@ -33,7 +33,7 @@ class LiveKitApplication : Application(), Configuration.Provider {
             .setBackoffCriteria(BackoffPolicy.LINEAR, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
             .build()
 
-        val syncRequest = PeriodicWorkRequestBuilder<UserSyncWorker>(15, TimeUnit.MINUTES)
+        val syncRequest = PeriodicWorkRequestBuilder<DataSyncWorker>(15, TimeUnit.MINUTES)
             .setConstraints(constraints)
             .build()
 

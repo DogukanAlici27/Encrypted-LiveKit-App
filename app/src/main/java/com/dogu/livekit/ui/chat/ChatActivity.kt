@@ -29,9 +29,15 @@ class ChatActivity : AppCompatActivity() {
     
     @Inject
     lateinit var userRepository: UserRepository
+
+    @Inject
+    lateinit var sessionPreferences: com.dogu.livekit.data.local.prefs.SessionPreferences
     
     private lateinit var adapter: ChatAdapter
     private var recipient: String? = null
+    private var groupId: String? = null
+    private var groupName: String? = null
+    private var groupMembers: List<String> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,12 +65,37 @@ class ChatActivity : AppCompatActivity() {
         }
 
         recipient = intent.getStringExtra("recipient")
-        if (recipient == null) {
+        groupId = intent.getStringExtra("groupId")
+        groupName = intent.getStringExtra("groupName")
+
+        if (recipient == null && groupId == null) {
             finish()
             return
         }
 
-        binding.chatRecipientTitle.text = recipient
+        if (groupId != null) {
+            binding.chatRecipientTitle.text = groupName ?: "Grup"
+            binding.chatRecipientStatus.visibility = View.GONE
+            setDefaultAvatar() // Gruplar için şimdilik varsayılan ikon
+            
+            // Katılımcıları çek ve başlığa ekle
+            viewModel.getGroup(groupId!!) { group ->
+                group?.let {
+                    val membersList = it.members.split(",").filter { m -> m.isNotBlank() }
+                    groupMembers = membersList
+                    if (membersList.isNotEmpty()) {
+                        val showCount = 2
+                        val displayed = membersList.take(showCount).joinToString(", ")
+                        val suffix = if (membersList.size > showCount) ", ..." else ""
+                        binding.chatRecipientTitle.text = "${it.name} ($displayed$suffix)"
+                    }
+                }
+            }
+        } else {
+            binding.chatRecipientTitle.text = recipient
+            observeRecipient()
+        }
+
         setupAdapter()
         binding.chatRecyclerView.adapter = adapter
         (binding.chatRecyclerView.layoutManager as LinearLayoutManager).stackFromEnd = true
@@ -83,15 +114,21 @@ class ChatActivity : AppCompatActivity() {
 
         binding.backButton.setOnClickListener { finish() }
         binding.sendButton.setOnClickListener { sendMessage() }
-        binding.headerProfileCard.setOnClickListener { showProfilePreview() }
+        binding.btnCallHeader.setOnClickListener { startCall() }
+        binding.headerProfileCard.setOnClickListener { 
+            if (groupId == null) showProfilePreview() 
+        }
 
         // Selection header clicks
         binding.closeMessageSelectionBtn.setOnClickListener { adapter.clearSelection() }
         binding.deleteMessagesBtn.setOnClickListener { confirmDeleteSelectedMessages() }
 
-        observeRecipient()
         observeMessages()
-        viewModel.markAsRead(recipient!!)
+        if (groupId != null) {
+            viewModel.markGroupAsRead(groupId!!)
+        } else {
+            viewModel.markAsRead(recipient!!)
+        }
 
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -223,17 +260,28 @@ class ChatActivity : AppCompatActivity() {
 
     private fun observeMessages() {
         lifecycleScope.launch {
-            viewModel.getMessages(recipient!!).collect { messages ->
-                adapter.submitList(messages) {
-                    if (messages.isNotEmpty()) {
-                        binding.chatRecyclerView.smoothScrollToPosition(messages.size - 1)
+            if (groupId != null) {
+                viewModel.getGroupMessages(groupId!!).collect { messages ->
+                    adapter.submitList(messages) {
+                        if (messages.isNotEmpty()) {
+                            binding.chatRecyclerView.smoothScrollToPosition(messages.size - 1)
+                        }
                     }
+                    viewModel.markGroupAsRead(groupId!!)
                 }
-                
-                // Mesajlar geldikçe eğer okunmamış ve karşıdan gelen mesaj varsa okundu yap
-                val unreadIncoming = messages.any { !it.isMine && !it.isRead }
-                if (unreadIncoming) {
-                    viewModel.markAsRead(recipient!!)
+            } else {
+                viewModel.getMessages(recipient!!).collect { messages ->
+                    adapter.submitList(messages) {
+                        if (messages.isNotEmpty()) {
+                            binding.chatRecyclerView.smoothScrollToPosition(messages.size - 1)
+                        }
+                    }
+                    
+                    // Mesajlar geldikçe eğer okunmamış ve karşıdan gelen mesaj varsa okundu yap
+                    val unreadIncoming = messages.any { !it.isMine && !it.isRead }
+                    if (unreadIncoming) {
+                        viewModel.markAsRead(recipient!!)
+                    }
                 }
             }
         }
@@ -241,9 +289,33 @@ class ChatActivity : AppCompatActivity() {
 
     private fun sendMessage() {
         val text = binding.messageEditText.text.toString().trim()
-        if (text.isNotEmpty() && recipient != null) {
-            viewModel.sendMessage(recipient!!, text)
+        if (text.isNotEmpty()) {
+            if (groupId != null) {
+                viewModel.sendGroupMessage(groupId!!, text)
+            } else if (recipient != null) {
+                viewModel.sendMessage(recipient!!, text)
+            }
             binding.messageEditText.text.clear()
+        }
+    }
+
+    private fun startCall() {
+        val target = if (groupId != null) {
+            val myId = sessionPreferences.getCurrentIdentity()
+            groupMembers.filter { it != myId }.joinToString(",")
+        } else {
+            recipient
+        }
+
+        if (!target.isNullOrEmpty()) {
+            val intent = android.content.Intent(this, com.dogu.livekit.ui.main.MainActivity::class.java).apply {
+                flags = android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("action_start_call", true)
+                putExtra("target", target)
+                putExtra("is_video", true)
+            }
+            startActivity(intent)
+            finish()
         }
     }
 

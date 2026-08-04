@@ -181,21 +181,56 @@
                         android:layout_marginTop="2dp" />
                 </LinearLayout>
 
-                <TextView
-                    android:id="@+id/connectionStatusBadge"
+                <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_alignParentEnd="true"
                     android:layout_centerVertical="true"
-                    android:background="@drawable/bg_status_badge"
-                    android:backgroundTint="@color/success_green"
-                    android:paddingHorizontal="10dp"
-                    android:paddingVertical="4dp"
-                    android:text="ÇEVRİMİÇİ"
-                    android:textColor="@color/white"
-                    android:textSize="10sp"
-                    android:textStyle="bold"
-                    android:visibility="gone" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnNewGroupHeader"
+                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:insetLeft="0dp"
+                        android:insetTop="0dp"
+                        android:insetRight="0dp"
+                        android:insetBottom="0dp"
+                        android:padding="8dp"
+                        android:visibility="gone"
+                        app:icon="@drawable/ic_people"
+                        app:iconGravity="textStart"
+                        app:iconPadding="0dp"
+                        app:iconSize="24dp"
+                        app:iconTint="@color/accent_blue"
+                        app:rippleColor="@color/accent_blue_alpha" />
+
+                    <ImageView
+                        android:id="@+id/syncStatusIcon"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_marginEnd="8dp"
+                        android:src="@drawable/ic_home"
+                        android:visibility="gone"
+                        app:tint="@color/text_gray" />
+
+                    <TextView
+                        android:id="@+id/connectionStatusBadge"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_status_badge"
+                        android:backgroundTint="@color/success_green"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="4dp"
+                        android:text="ÇEVRİMİÇİ"
+                        android:textColor="@color/white"
+                        android:textSize="10sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
+                </LinearLayout>
 
             </RelativeLayout>
 
@@ -840,11 +875,12 @@
             android:id="@+id/groupCallFab"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="bottom|center_horizontal"
-            android:layout_marginBottom="80dp"
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="24dp"
+            android:layout_marginBottom="150dp"
             android:text="GRUP ARA"
             android:textColor="@color/white"
-            app:icon="@android:drawable/ic_menu_call"
+            app:icon="@drawable/ic_people"
             app:iconTint="@color/white"
             app:backgroundTint="@color/accent_blue"
             android:visibility="gone" />

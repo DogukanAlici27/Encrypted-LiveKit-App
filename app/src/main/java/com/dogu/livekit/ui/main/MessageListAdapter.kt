@@ -5,11 +5,13 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.dogu.livekit.R
 import com.dogu.livekit.core.util.ImageUtils
+import com.dogu.livekit.data.local.entity.GroupEntity
 import com.dogu.livekit.data.local.entity.MessageEntity
 import com.dogu.livekit.data.local.entity.UserEntity
 import java.text.SimpleDateFormat
@@ -18,13 +20,20 @@ import java.util.*
 class MessageListAdapter(
     private val myIdentity: String,
     private val onChatClick: (String) -> Unit,
+    private val onGroupChatClick: (String, String) -> Unit,
     private val onLongClick: (String, Boolean) -> Unit
 ) : ListAdapter<MessageEntity, MessageListAdapter.ViewHolder>(DiffCallback()) {
 
     private var users: List<UserEntity> = emptyList()
+    private var groups: List<GroupEntity> = emptyList()
 
     fun setUserData(newUsers: List<UserEntity>) {
         users = newUsers
+        notifyDataSetChanged()
+    }
+
+    fun setGroupData(newGroups: List<GroupEntity>) {
+        groups = newGroups
         notifyDataSetChanged()
     }
 
@@ -35,9 +44,14 @@ class MessageListAdapter(
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val message = getItem(position)
-        val otherParty = if (message.sender == myIdentity) message.recipient else message.sender
-        val user = users.find { it.identity == otherParty }
-        holder.bind(otherParty, message, user)
+        if (message.groupId != null) {
+            val group = groups.find { it.id == message.groupId }
+            holder.bindGroup(message.groupId!!, message, group)
+        } else {
+            val otherParty = if (message.sender == myIdentity) message.recipient else message.sender
+            val user = users.find { it.identity == otherParty }
+            holder.bind(otherParty, message, user)
+        }
     }
 
     inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -83,6 +97,31 @@ class MessageListAdapter(
             }
         }
 
+        fun bindGroup(groupId: String, lastMessage: MessageEntity, group: GroupEntity?) {
+            val baseName = group?.name ?: "Grup"
+            
+            // Ana listede parantez içindeki isimleri kaldırıyoruz, sadece "Grup:" belirteci ekliyoruz
+            nameText.text = "Grup: $baseName"
+            
+            lastMessageText.text = if (lastMessage.isMine) "Siz: ${lastMessage.content}" else "${lastMessage.sender}: ${lastMessage.content}"
+            timeText.text = sdf.format(Date(lastMessage.timestamp))
+            timeText.visibility = View.VISIBLE
+            statusDot.visibility = View.GONE
+            callBtn.visibility = View.GONE
+            chatBtn.visibility = View.GONE
+            selectCb.visibility = View.GONE
+            muteImg.visibility = View.GONE
+
+            avatarImg.setImageResource(R.drawable.ic_people)
+            val padding = (4 * itemView.resources.displayMetrics.density).toInt()
+            avatarImg.setPadding(padding, padding, padding, padding)
+            avatarImg.imageTintList = android.content.res.ColorStateList.valueOf(
+                ContextCompat.getColor(itemView.context, R.color.accent_blue)
+            )
+
+            itemView.setOnClickListener { onGroupChatClick(groupId, group?.name ?: "Grup") }
+        }
+
         private fun setDefaultAvatar() {
             avatarImg.setImageResource(R.drawable.ic_person)
             val padding = (4 * itemView.resources.displayMetrics.density).toInt()
@@ -91,9 +130,13 @@ class MessageListAdapter(
     }
 
     class DiffCallback : DiffUtil.ItemCallback<MessageEntity>() {
-        override fun areItemsTheSame(oldItem: MessageEntity, newItem: MessageEntity) = 
-            (oldItem.sender == newItem.sender && oldItem.recipient == newItem.recipient) ||
-            (oldItem.sender == newItem.recipient && oldItem.recipient == newItem.sender)
+        override fun areItemsTheSame(oldItem: MessageEntity, newItem: MessageEntity): Boolean {
+            if (oldItem.groupId != null || newItem.groupId != null) {
+                return oldItem.groupId == newItem.groupId
+            }
+            return (oldItem.sender == newItem.sender && oldItem.recipient == newItem.recipient) ||
+                   (oldItem.sender == newItem.recipient && oldItem.recipient == newItem.sender)
+        }
             
         override fun areContentsTheSame(oldItem: MessageEntity, newItem: MessageEntity) = 
             oldItem.content == newItem.content && oldItem.timestamp == newItem.timestamp

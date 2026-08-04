@@ -14,10 +14,9 @@
         android:padding="24dp">
 
         <TextView
-            android:id="@+id/dialogTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="ŞİFRE DEĞİŞTİR"
+            android:text="GRUP OLUŞTUR"
             android:textColor="@color/accent_blue"
             android:textSize="20sp"
             android:textStyle="bold"
@@ -26,8 +25,7 @@
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Mevcut Şifre"
-            app:passwordToggleEnabled="true"
+            android:hint="Grup İsmi"
             app:boxBackgroundColor="@color/bg_input"
             app:boxCornerRadiusTopStart="12dp"
             app:boxCornerRadiusTopEnd="12dp"
@@ -36,52 +34,10 @@
             app:boxStrokeWidth="0dp"
             style="@style/Widget.MaterialComponents.TextInputLayout.FilledBox">
             <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/oldPasswordEt"
+                android:id="@+id/groupNameEt"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="textPassword"
-                android:textColor="@color/text_white" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:hint="Yeni Şifre"
-            app:passwordToggleEnabled="true"
-            app:boxBackgroundColor="@color/bg_input"
-            app:boxCornerRadiusTopStart="12dp"
-            app:boxCornerRadiusTopEnd="12dp"
-            app:boxCornerRadiusBottomStart="12dp"
-            app:boxCornerRadiusBottomEnd="12dp"
-            app:boxStrokeWidth="0dp"
-            style="@style/Widget.MaterialComponents.TextInputLayout.FilledBox">
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/newPasswordEt"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="textPassword"
-                android:textColor="@color/text_white" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:hint="Yeni Şifre (Tekrar)"
-            app:passwordToggleEnabled="true"
-            app:boxBackgroundColor="@color/bg_input"
-            app:boxCornerRadiusTopStart="12dp"
-            app:boxCornerRadiusTopEnd="12dp"
-            app:boxCornerRadiusBottomStart="12dp"
-            app:boxCornerRadiusBottomEnd="12dp"
-            app:boxStrokeWidth="0dp"
-            style="@style/Widget.MaterialComponents.TextInputLayout.FilledBox">
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/confirmPasswordEt"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="textPassword"
+                android:inputType="textCapWords"
                 android:textColor="@color/text_white" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -93,7 +49,7 @@
             android:orientation="horizontal">
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnCancelPass"
+                android:id="@+id/btnCancel"
                 style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -101,13 +57,13 @@
                 android:textColor="@color/text_gray" />
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSavePass"
+                android:id="@+id/btnCreate"
                 style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="12dp"
                 android:backgroundTint="@color/accent_blue"
-                android:text="DEĞİŞTİR"
+                android:text="OLUŞTUR"
                 app:cornerRadius="12dp" />
 
         </LinearLayout>

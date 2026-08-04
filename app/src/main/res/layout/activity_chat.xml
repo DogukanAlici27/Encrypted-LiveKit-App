@@ -60,7 +60,7 @@
                 android:layout_marginEnd="12dp"
                 android:orientation="vertical"
                 app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/btnCallHeader"
                 app:layout_constraintStart_toEndOf="@id/headerProfileCard"
                 app:layout_constraintTop_toTopOf="parent">
 
@@ -83,6 +83,19 @@
                     android:textSize="12sp"
                     tools:text="online" />
             </LinearLayout>
+
+            <ImageView
+                android:id="@+id/btnCallHeader"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="8dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:padding="12dp"
+                android:src="@drawable/ic_videocam_on"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:tint="@color/accent_blue" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 

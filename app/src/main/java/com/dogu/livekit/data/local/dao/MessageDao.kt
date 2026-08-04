@@ -8,17 +8,27 @@ import kotlinx.coroutines.flow.Flow
 interface MessageDao {
     @Query("""
         SELECT * FROM messages 
-        WHERE (sender = :me AND recipient = :user) 
-           OR (sender = :user AND recipient = :me) 
+        WHERE (sender = :me AND recipient = :user AND groupId IS NULL) 
+           OR (sender = :user AND recipient = :me AND groupId IS NULL) 
         ORDER BY timestamp ASC
     """)
     fun getChatMessages(me: String, user: String): Flow<List<MessageEntity>>
+
+    @Query("""
+        SELECT * FROM messages 
+        WHERE groupId = :groupId
+        ORDER BY timestamp ASC
+    """)
+    fun getGroupMessages(groupId: String): Flow<List<MessageEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: MessageEntity): Long
 
     @Query("UPDATE messages SET isRead = 1 WHERE sender = :sender AND recipient = :me AND isRead = 0")
     suspend fun markAsRead(sender: String, me: String)
+
+    @Query("UPDATE messages SET isRead = 1 WHERE groupId = :groupId AND isRead = 0 AND sender != :me")
+    suspend fun markGroupAsRead(groupId: String, me: String)
 
     @Query("UPDATE messages SET isRead = 1 WHERE sender = :me AND recipient = :recipient AND isRead = 0")
     suspend fun markSentMessagesAsRead(me: String, recipient: String)
@@ -27,8 +37,13 @@ interface MessageDao {
         SELECT * FROM messages 
         WHERE id IN (
             SELECT MAX(id) FROM messages 
-            WHERE sender = :me OR recipient = :me 
-            GROUP BY CASE WHEN sender = :me THEN recipient ELSE sender END
+            WHERE (sender = :me OR recipient = :me OR groupId IS NOT NULL)
+            GROUP BY 
+                CASE 
+                    WHEN groupId IS NOT NULL THEN groupId 
+                    WHEN sender = :me THEN recipient 
+                    ELSE sender 
+                END
         )
         ORDER BY timestamp DESC
     """)

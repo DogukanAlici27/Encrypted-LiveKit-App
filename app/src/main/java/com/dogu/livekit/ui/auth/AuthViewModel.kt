@@ -51,6 +51,7 @@ class AuthViewModel @Inject constructor(
                         }
 
                         userRepository.saveLocalUser(identity, password, publicKey, true)
+                        userRepository.scheduleDataSync()
                         sessionPreferences.setLoggedIn(true, identity)
                         sessionPreferences.saveRememberMe(identity, password, isRemembered)
                         _authState.value = AuthState.Success(identity, isOnline = false)

@@ -1,10 +1,20 @@
 package com.dogu.livekit.data.repository
 
+import android.content.Context
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
+import androidx.work.WorkManager
+import com.dogu.livekit.core.logging.Logger
+import com.dogu.livekit.worker.DataSyncWorker
 import com.dogu.livekit.data.local.AppDatabase
 import com.dogu.livekit.data.local.entity.CallLogEntity
 import com.dogu.livekit.data.local.entity.UserEntity
 import com.dogu.livekit.data.remote.NetworkClient
 import com.dogu.livekit.data.local.prefs.SessionPreferences
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -18,6 +28,7 @@ import javax.inject.Singleton
 
 @Singleton
 class UserRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val db: AppDatabase,
     private val httpClient: OkHttpClient,
     private val sessionPreferences: SessionPreferences
@@ -57,14 +68,38 @@ class UserRepository @Inject constructor(
         val currentIdentity = sessionPreferences.getCurrentIdentity()
 
         val unsynced = db.userDao().getUnsyncedUsers()
+        if (unsynced.isNotEmpty()) {
+            Logger.d("📤 ${unsynced.size} bekleyen kullanıcı kaydı senkronize ediliyor...")
+        }
+        
         unsynced.forEach { user ->
             val isMe = user.identity.trim() == currentIdentity?.trim()
             val result = auth("register", user.identity, user.password ?: "", fcmToken, user.publicKey, isOnline = isMe)
 
             if (result.isSuccess || result.exceptionOrNull()?.message?.contains("409") == true) {
                 db.userDao().markAsSynced(user.identity)
+                Logger.d("✅ ${user.identity} başarıyla senkronize edildi")
+            } else {
+                Logger.e("❌ ${user.identity} senkronizasyon hatası: ${result.exceptionOrNull()?.message}")
             }
         }
+    }
+
+    fun scheduleDataSync() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val syncRequest = OneTimeWorkRequestBuilder<DataSyncWorker>()
+            .setConstraints(constraints)
+            .addTag("data_push")
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "data_push_work",
+            ExistingWorkPolicy.REPLACE,
+            syncRequest
+        )
     }
 
     suspend fun saveLocalUser(identity: String, password: String, publicKey: String?, needsSync: Boolean) = withContext(Dispatchers.IO) {
