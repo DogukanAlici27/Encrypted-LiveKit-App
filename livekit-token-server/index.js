@@ -161,14 +161,20 @@ app.get('/users', (req, res) => {
   const requesterIdentity = req.query.identity;
   const requester = users[requesterIdentity];
  
-  res.json(Object.keys(users).map(id => ({
-    identity: id,
-    isOnline: (Date.now() - (users[id].lastSeen || 0)) < ONLINE_THRESHOLD_MS,
-    profilePhoto: users[id].profilePhoto,
-    currentRoom: users[id].currentRoom,
-    publicKey: users[id].publicKey || null,
-    isBlocked: requester ? (requester.blockedUsers || []).includes(id) : false
-  })));
+  res.json(Object.keys(users).map(id => {
+    const user = users[id];
+    // Kritik Gizlilik: Eğer liste elemanı (id), listeyi isteyeni (requesterIdentity) engellemişse bilgileri gizle
+    const hasBlockedRequester = (user.blockedUsers || []).includes(requesterIdentity);
+
+    return {
+      identity: id,
+      isOnline: hasBlockedRequester ? false : (Date.now() - (user.lastSeen || 0)) < ONLINE_THRESHOLD_MS,
+      profilePhoto: user.profilePhoto,
+      currentRoom: hasBlockedRequester ? null : user.currentRoom,
+      publicKey: user.publicKey || null,
+      isBlocked: requester ? (requester.blockedUsers || []).includes(id) : false
+    };
+  }));
 });
  
 // -------------------------------------------------------------------
@@ -367,11 +373,37 @@ app.post('/create-group', (req, res) => {
     id: groupId,
     name: name,
     members: members, // members listesinde owner da olmalı
-    owner: owner
+    owner: owner,
+    createdAt: Date.now()
   };
 
   console.log(`Grup Oluşturuldu: ${name} (${groupId}) - Üyeler: ${members.join(', ')}`);
   res.json({ groupId: groupId });
+});
+
+// YENİ: Grup Detaylarını Çekme
+app.get('/group-details', (req, res) => {
+  const { groupId } = req.query;
+  if (!groupId || !groups[groupId]) {
+    return res.status(404).send("Grup bulunamadı.");
+  }
+  res.json(groups[groupId]);
+});
+
+// YENİ: Yöneticilik Devretme
+app.post('/transfer-admin', (req, res) => {
+  const { groupId, currentAdmin, newAdmin } = req.body;
+  if (!groups[groupId]) return res.status(404).send("Grup bulunamadı");
+
+  if (groups[groupId].owner !== currentAdmin) {
+    return res.status(403).send("Sadece mevcut yönetici yetki devredebilir.");
+  }
+
+  groups[groupId].owner = newAdmin;
+  console.log(`YÖNETİCİ DEVRİ: ${groupId} -> Yeni Yönetici: ${newAdmin}`);
+
+  // Gruptakilere bildirim gönderilebilir (opsiyonel, şimdilik log basıyoruz)
+  res.json({ success: true });
 });
 
 app.post('/send-group-message', (req, res) => {
@@ -388,15 +420,18 @@ app.post('/send-group-message', (req, res) => {
 
   const serverMsgId = `MSG_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
   messageStatus[serverMsgId] = {};
+
+  // Mesaj durumlarını sadece göndereni engelleNMEMİŞ üyeler için hazırla
   group.members.forEach(m => {
-    if (m !== sender) {
+    if (m !== sender && !isBlockedBy(m, sender)) {
       messageStatus[serverMsgId][m] = { delivered: null, read: null };
     }
   });
 
   if (firebaseReady) {
     const promises = group.members
-      .filter(m => m !== sender) // Gönderen hariç herkese gönder
+      .filter(m => m !== sender)
+      .filter(m => !isBlockedBy(m, sender)) // Engellemiş olanlara BİLDİRİM GİTMESİN
       .map(memberId => {
         const member = users[memberId];
         if (member && member.fcmToken) {
@@ -443,6 +478,13 @@ app.post('/send-message', (req, res) => {
   }
 
   const serverMsgId = `MSG_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
+
+  // Eğer alıcı göndereni engellediyse, bildirim GÖNDERME ama başarılı dön
+  if (isBlockedBy(recipient, sender)) {
+    console.log(`[ENGEL] ${recipient} kişisi ${sender}'yı engellemiş, mesaj iletilmiyor (Sessiz Başarı)`);
+    return res.json({ success: true, serverMsgId: serverMsgId });
+  }
+
   messageStatus[serverMsgId] = {};
   messageStatus[serverMsgId][recipient] = { delivered: null, read: null };
 

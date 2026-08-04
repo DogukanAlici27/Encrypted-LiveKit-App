@@ -110,7 +110,9 @@ class MessageListAdapter(
             callBtn.visibility = View.GONE
             chatBtn.visibility = View.GONE
             selectCb.visibility = View.GONE
-            muteImg.visibility = View.GONE
+            
+            val isGroupMuted = group?.isMuted == true
+            muteImg.visibility = if (isGroupMuted) View.VISIBLE else View.GONE
 
             avatarImg.setImageResource(R.drawable.ic_people)
             val padding = (4 * itemView.resources.displayMetrics.density).toInt()
@@ -120,6 +122,10 @@ class MessageListAdapter(
             )
 
             itemView.setOnClickListener { onGroupChatClick(groupId, group?.name ?: "Grup") }
+            itemView.setOnLongClickListener {
+                onLongClick(groupId, isGroupMuted)
+                true
+            }
         }
 
         private fun setDefaultAvatar() {

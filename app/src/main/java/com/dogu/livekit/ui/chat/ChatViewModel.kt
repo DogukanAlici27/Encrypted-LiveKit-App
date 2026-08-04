@@ -82,6 +82,13 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    fun deleteGroupConversation(groupId: String) {
+        viewModelScope.launch {
+            groupRepository.updateLastMessage(groupId, "", System.currentTimeMillis())
+            messageRepository.deleteGroupMessages(groupId)
+        }
+    }
+
     fun deleteMessage(messageId: Long) {
         viewModelScope.launch {
             messageRepository.deleteMessage(messageId)
@@ -97,6 +104,12 @@ class ChatViewModel @Inject constructor(
     fun toggleMute(identity: String, currentStatus: Boolean) {
         viewModelScope.launch {
             userRepository.updateMutedStatus(identity, !currentStatus)
+        }
+    }
+
+    fun toggleGroupMute(groupId: String, currentStatus: Boolean) {
+        viewModelScope.launch {
+            groupRepository.updateMutedStatus(groupId, !currentStatus)
         }
     }
 

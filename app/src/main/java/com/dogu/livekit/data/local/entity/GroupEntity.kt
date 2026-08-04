@@ -10,5 +10,7 @@ data class GroupEntity(
     val owner: String,
     val members: String, // Virgülle ayrılmış identity listesi
     val lastMessage: String? = null,
-    val lastMessageTimestamp: Long = System.currentTimeMillis()
+    val lastMessageTimestamp: Long = System.currentTimeMillis(),
+    val isMuted: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis()
 )

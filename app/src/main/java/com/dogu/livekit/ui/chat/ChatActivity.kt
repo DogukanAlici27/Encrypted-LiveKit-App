@@ -1,5 +1,6 @@
 package com.dogu.livekit.ui.chat
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.ImageView
@@ -117,13 +118,34 @@ class ChatActivity : AppCompatActivity() {
         binding.backButton.setOnClickListener { finish() }
         binding.sendButton.setOnClickListener { sendMessage() }
         binding.btnCallHeader.setOnClickListener { startCall() }
+        binding.headerTextContainer.setOnClickListener {
+            if (groupId != null) {
+                val intent = Intent(this, GroupDetailActivity::class.java).apply {
+                    putExtra("groupId", groupId)
+                }
+                startActivity(intent)
+            } else {
+                showProfilePreview()
+            }
+        }
         binding.headerProfileCard.setOnClickListener { 
-            if (groupId == null) showProfilePreview() 
+            binding.headerTextContainer.performClick()
         }
 
         // Selection header clicks
         binding.closeMessageSelectionBtn.setOnClickListener { adapter.clearSelection() }
         binding.deleteMessagesBtn.setOnClickListener { confirmDeleteSelectedMessages() }
+        binding.btnInfoMessage.setOnClickListener {
+            val selected = adapter.getSelectedMessages()
+            if (selected.size == 1) {
+                val message = selected[0]
+                if (message.remoteId != null) {
+                    showMessageInfoDialog(message)
+                } else {
+                    Toast.makeText(this, "Mesaj henüz sunucuya ulaşmadı", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
 
         observeMessages()
         if (groupId != null) {
@@ -148,53 +170,31 @@ class ChatActivity : AppCompatActivity() {
     private fun setupAdapter() {
         adapter = ChatAdapter(
             onMessageLongClick = { message -> 
-                if (message.isMine) {
-                    showMyMessageOptionsMenu(message)
-                } else {
-                    adapter.toggleSelection(message.id)
-                }
+                adapter.toggleSelection(message.id)
             },
             onSelectionChanged = { count ->
                 if (count > 0) {
                     binding.standardChatHeader.visibility = View.GONE
                     binding.selectionChatHeader.visibility = View.VISIBLE
                     binding.messageSelectionCountText.text = getString(R.string.message_selection_count, count)
+                    
+                    // Bilgi butonu kontrolü: Sadece 1 mesaj seçiliyse ve o mesaj benimse göster
+                    if (count == 1) {
+                        val selected = adapter.getSelectedMessages()
+                        if (selected.isNotEmpty() && selected[0].isMine) {
+                            binding.btnInfoMessage.visibility = View.VISIBLE
+                        } else {
+                            binding.btnInfoMessage.visibility = View.GONE
+                        }
+                    } else {
+                        binding.btnInfoMessage.visibility = View.GONE
+                    }
                 } else {
                     binding.selectionChatHeader.visibility = View.GONE
                     binding.standardChatHeader.visibility = View.VISIBLE
                 }
             }
         )
-    }
-
-    private fun showMyMessageOptionsMenu(message: MessageEntity) {
-        val options = arrayOf("Bilgi", "Seç", "Sil")
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> {
-                        if (message.remoteId != null) {
-                            showMessageInfoDialog(message)
-                        } else {
-                            Toast.makeText(this, "Mesaj henüz sunucuya ulaşmadı", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                    1 -> adapter.toggleSelection(message.id)
-                    2 -> confirmDeleteSingleMessage(message)
-                }
-            }
-            .show()
-    }
-
-    private fun confirmDeleteSingleMessage(message: MessageEntity) {
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Mesajı Sil")
-            .setMessage("Bu mesajı silmek istediğinize emin misiniz?")
-            .setPositiveButton("Sil") { _, _ ->
-                viewModel.deleteMessage(message.id)
-            }
-            .setNegativeButton("İptal", null)
-            .show()
     }
 
     private fun showMessageInfoDialog(message: MessageEntity) {

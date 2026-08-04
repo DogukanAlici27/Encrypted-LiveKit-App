@@ -198,6 +198,10 @@ class MessageRepository @Inject constructor(
         db.messageDao().deleteConversation(me, user)
     }
 
+    suspend fun deleteGroupMessages(groupId: String) = withContext(Dispatchers.IO) {
+        db.messageDao().deleteGroupMessages(groupId)
+    }
+
     suspend fun deleteMessage(messageId: Long) = withContext(Dispatchers.IO) {
         db.messageDao().deleteById(messageId)
     }

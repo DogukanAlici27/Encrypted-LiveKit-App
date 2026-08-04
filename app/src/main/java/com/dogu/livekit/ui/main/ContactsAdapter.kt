@@ -91,13 +91,22 @@ class ContactsAdapter(
                 }
                 avatarImg.setOnClickListener { toggleSelection() }
                 itemView.findViewById<View>(R.id.textContainer).setOnClickListener { toggleSelection() }
+                
+                // Seçim modunda da uzun basma engelleme menüsünü açabilsin
+                avatarImg.setOnLongClickListener { onLongClick(user); true }
+                itemView.findViewById<View>(R.id.textContainer).setOnLongClickListener { onLongClick(user); true }
             } else {
                 selectCb.visibility = View.GONE
                 chatBtn.visibility = View.VISIBLE
                 callBtn.visibility = View.VISIBLE
                 
-                avatarImg.setOnClickListener { /* Normal tık */ }
-                itemView.findViewById<View>(R.id.textContainer).setOnClickListener { /* Normal tık */ }
+                // Normal modda tıklandığında sohbeti aç
+                avatarImg.setOnClickListener { onChatClick(user) }
+                itemView.findViewById<View>(R.id.textContainer).setOnClickListener { onChatClick(user) }
+                
+                // Normal modda uzun basıldığında engelleme menüsünü aç
+                avatarImg.setOnLongClickListener { onLongClick(user); true }
+                itemView.findViewById<View>(R.id.textContainer).setOnLongClickListener { onLongClick(user); true }
             }
 
             val canCall = !isInCall && !isOffline

@@ -77,6 +77,11 @@
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.LiveKit" />
 
+        <activity
+            android:name=".ui.chat.GroupDetailActivity"
+            android:exported="false"
+            android:theme="@style/Theme.LiveKit" />
+
         <!-- Hilt-WorkManager entegrasyonu için varsayılan başlatıcıyı devre dışı bırakıyoruz -->
         <provider
             android:name="androidx.startup.InitializationProvider"

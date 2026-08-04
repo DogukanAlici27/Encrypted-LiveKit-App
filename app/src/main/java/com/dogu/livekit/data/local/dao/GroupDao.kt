@@ -23,4 +23,7 @@ interface GroupDao {
 
     @Query("DELETE FROM groups WHERE id = :groupId")
     suspend fun deleteGroup(groupId: String)
+
+    @Query("UPDATE groups SET isMuted = :isMuted WHERE id = :groupId")
+    suspend fun updateMutedStatus(groupId: String, isMuted: Boolean)
 }

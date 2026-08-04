@@ -55,6 +55,9 @@ interface MessageDao {
     @Query("DELETE FROM messages WHERE id = :messageId")
     suspend fun deleteById(messageId: Long)
 
+    @Query("DELETE FROM messages WHERE groupId = :groupId")
+    suspend fun deleteGroupMessages(groupId: String)
+
     @Delete
     suspend fun delete(message: MessageEntity)
 

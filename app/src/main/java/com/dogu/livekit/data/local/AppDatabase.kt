@@ -13,7 +13,7 @@ import com.dogu.livekit.data.local.entity.GroupEntity
 import com.dogu.livekit.data.local.entity.MessageEntity
 import com.dogu.livekit.data.local.entity.UserEntity
 
-@Database(entities = [UserEntity::class, CallLogEntity::class, MessageEntity::class, GroupEntity::class], version = 7, exportSchema = false)
+@Database(entities = [UserEntity::class, CallLogEntity::class, MessageEntity::class, GroupEntity::class], version = 9, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
     abstract fun callLogDao(): CallLogDao

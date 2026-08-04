@@ -108,8 +108,15 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val timestamp = timestampStr?.toLongOrNull() ?: System.currentTimeMillis()
 
         serviceScope.launch {
-            messageRepository.receiveMessage(sender, content, timestamp, recipient = recipient, remoteId = serverMsgId)
+            // 1. YEREL ENGEL KONTROLÜ
             val user = userRepository.fetchLocalUser(sender)
+            if (user != null && user.isBlocked) {
+                Log.d("FCM", "Engellenen kullanıcıdan ($sender) gelen mesaj reddedildi.")
+                return@launch
+            }
+
+            messageRepository.receiveMessage(sender, content, timestamp, recipient = recipient, remoteId = serverMsgId)
+            
             if (user?.isMuted == true) {
                 Log.d("FCM", "Mesaj sessize alınan kullanıcıdan ($sender) geldi. Bildirim gösterilmiyor.")
                 return@launch
@@ -130,8 +137,23 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val timestamp = timestampStr?.toLongOrNull() ?: System.currentTimeMillis()
 
         serviceScope.launch {
+            // 1. YEREL ENGEL KONTROLÜ (Grup içinde olsa bile engellenen kişiyi görme)
+            val senderUser = userRepository.fetchLocalUser(sender)
+            if (senderUser != null && senderUser.isBlocked) {
+                Log.d("FCM", "Grup içindeki engelli kullanıcıdan ($sender) gelen mesaj reddedildi.")
+                return@launch
+            }
+
             // Önce grubu yerelde kontrol et/oluştur
             val existingGroup = groupRepository.getGroup(groupId)
+            
+            // 2. SESSİZE ALMA KONTROLÜ
+            if (existingGroup?.isMuted == true) {
+                Log.d("FCM", "Grup ($groupName) sessize alınmış. Mesaj kaydediliyor ama bildirim gösterilmiyor.")
+                messageRepository.receiveMessage(sender, content, timestamp, groupId, remoteId = serverMsgId)
+                return@launch
+            }
+
             if (existingGroup == null) {
                 val newGroup = com.dogu.livekit.data.local.entity.GroupEntity(
                     id = groupId,

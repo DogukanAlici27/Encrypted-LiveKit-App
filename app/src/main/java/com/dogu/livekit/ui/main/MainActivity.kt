@@ -43,6 +43,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.milliseconds
@@ -68,6 +69,7 @@ class MainActivity : AppCompatActivity() {
     lateinit var userRepository: com.dogu.livekit.data.repository.UserRepository
 
     private lateinit var messageListAdapter: MessageListAdapter
+    private lateinit var blockedAdapter: BlockedUsersAdapter
     private val historyAdapter = CallLogAdapter()
     private val contactsAdapter = ContactsAdapter(
         onCallClick = { user -> startCall(user.identity) },
@@ -265,10 +267,7 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             contactsViewModel.blockedUsers.collect { blocked ->
-                binding.blockedRecyclerView.adapter = BlockedUsersAdapter(blocked) { user ->
-                    contactsViewModel.toggleBlockUser(user.identity, false)
-                    showStatus("${user.identity} engeli kaldırıldı")
-                }
+                blockedAdapter.updateData(blocked)
             }
         }
 
@@ -467,6 +466,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.contactsRecyclerView.adapter = contactsAdapter
+        
+        blockedAdapter = BlockedUsersAdapter(emptyList()) { user ->
+            contactsViewModel.toggleBlockUser(user.identity, false)
+            showStatus("${user.identity} engeli kaldırıldı")
+        }
+        binding.blockedRecyclerView.apply {
+            layoutManager = LinearLayoutManager(this@MainActivity)
+            adapter = blockedAdapter
+        }
 
         val myId = sessionPreferences.getCurrentIdentity() ?: ""
         messageListAdapter = MessageListAdapter(
@@ -808,19 +816,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showConversationOptionsDialog(identity: String, isMuted: Boolean) {
+    private fun showConversationOptionsDialog(id: String, isMuted: Boolean) {
+        val isGroup = id.startsWith("GROUP_")
         val dialog = BottomSheetDialog(this, R.style.TransparentBottomSheetDialogTheme)
         val view = layoutInflater.inflate(R.layout.layout_bottom_sheet_options, null)
         dialog.setContentView(view)
 
-        view.findViewById<TextView>(R.id.sheetTitle).text = identity
+        // Başlık için grup adını bulmaya çalış
+        if (isGroup) {
+            lifecycleScope.launch {
+                val group = chatViewModel.getAllGroups().first().find { it.id == id }
+                view.findViewById<TextView>(R.id.sheetTitle).text = group?.name ?: "Grup"
+            }
+        } else {
+            view.findViewById<TextView>(R.id.sheetTitle).text = id
+        }
         
         val opt1 = view.findViewById<View>(R.id.option1)
         view.findViewById<TextView>(R.id.option1Text).text = "Mesajları Sil"
         view.findViewById<ImageView>(R.id.option1Icon).setImageResource(R.drawable.ic_delete)
         opt1.setOnClickListener {
             dialog.dismiss()
-            confirmDeleteConversation(identity)
+            if (isGroup) confirmDeleteGroupConversation(id)
+            else confirmDeleteConversation(id)
         }
 
         val opt2 = view.findViewById<View>(R.id.option2)
@@ -828,10 +846,22 @@ class MainActivity : AppCompatActivity() {
         view.findViewById<ImageView>(R.id.option2Icon).setImageResource(R.drawable.ic_notifications_off)
         opt2.setOnClickListener {
             dialog.dismiss()
-            chatViewModel.toggleMute(identity, isMuted)
+            if (isGroup) chatViewModel.toggleGroupMute(id, isMuted)
+            else chatViewModel.toggleMute(id, isMuted)
         }
 
         dialog.show()
+    }
+
+    private fun confirmDeleteGroupConversation(groupId: String) {
+        showModernConfirmDialog(
+            "Konuşmayı Sil",
+            "Bu gruptaki tüm mesajları silmek istediğinize emin misiniz?",
+            "SİL"
+        ) {
+            chatViewModel.deleteGroupConversation(groupId)
+            showStatus("Grup konuşması silindi")
+        }
     }
 
     private fun confirmDeleteConversation(identity: String) {
