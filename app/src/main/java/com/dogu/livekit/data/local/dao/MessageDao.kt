@@ -8,8 +8,8 @@ import kotlinx.coroutines.flow.Flow
 interface MessageDao {
     @Query("""
         SELECT * FROM messages 
-        WHERE (sender = :me AND recipient = :user AND groupId IS NULL) 
-           OR (sender = :user AND recipient = :me AND groupId IS NULL) 
+        WHERE (LOWER(sender) = LOWER(:me) AND LOWER(recipient) = LOWER(:user) AND groupId IS NULL) 
+           OR (LOWER(sender) = LOWER(:user) AND LOWER(recipient) = LOWER(:me) AND groupId IS NULL) 
         ORDER BY timestamp ASC
     """)
     fun getChatMessages(me: String, user: String): Flow<List<MessageEntity>>
@@ -24,25 +24,25 @@ interface MessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: MessageEntity): Long
 
-    @Query("UPDATE messages SET isRead = 1 WHERE sender = :sender AND recipient = :me AND isRead = 0")
+    @Query("UPDATE messages SET isRead = 1 WHERE LOWER(sender) = LOWER(:sender) AND LOWER(recipient) = LOWER(:me) AND isRead = 0")
     suspend fun markAsRead(sender: String, me: String)
 
-    @Query("UPDATE messages SET isRead = 1 WHERE groupId = :groupId AND isRead = 0 AND sender != :me")
+    @Query("UPDATE messages SET isRead = 1 WHERE groupId = :groupId AND isRead = 0 AND LOWER(sender) != LOWER(:me)")
     suspend fun markGroupAsRead(groupId: String, me: String)
 
-    @Query("UPDATE messages SET isRead = 1 WHERE sender = :me AND recipient = :recipient AND isRead = 0")
+    @Query("UPDATE messages SET isRead = 1 WHERE LOWER(sender) = LOWER(:me) AND LOWER(recipient) = LOWER(:recipient) AND isRead = 0")
     suspend fun markSentMessagesAsRead(me: String, recipient: String)
 
     @Query("""
         SELECT * FROM messages 
         WHERE id IN (
             SELECT MAX(id) FROM messages 
-            WHERE (sender = :me OR recipient = :me OR groupId IS NOT NULL)
+            WHERE (LOWER(sender) = LOWER(:me) OR LOWER(recipient) = LOWER(:me) OR groupId IS NOT NULL)
             GROUP BY 
                 CASE 
                     WHEN groupId IS NOT NULL THEN groupId 
-                    WHEN sender = :me THEN recipient 
-                    ELSE sender 
+                    WHEN LOWER(sender) = LOWER(:me) THEN LOWER(recipient) 
+                    ELSE LOWER(sender) 
                 END
         )
         ORDER BY timestamp DESC
@@ -57,4 +57,7 @@ interface MessageDao {
 
     @Delete
     suspend fun delete(message: MessageEntity)
+
+    @Query("UPDATE messages SET remoteId = :remoteId WHERE id = :localId")
+    suspend fun updateRemoteId(localId: Long, remoteId: String)
 }

@@ -48,8 +48,8 @@ class MessageListAdapter(
             val group = groups.find { it.id == message.groupId }
             holder.bindGroup(message.groupId!!, message, group)
         } else {
-            val otherParty = if (message.sender == myIdentity) message.recipient else message.sender
-            val user = users.find { it.identity == otherParty }
+            val otherParty = if (message.sender.equals(myIdentity, ignoreCase = true)) message.recipient else message.sender
+            val user = users.find { it.identity.equals(otherParty, ignoreCase = true) }
             holder.bind(otherParty, message, user)
         }
     }

@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -14,6 +15,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.dogu.livekit.R
 import com.dogu.livekit.core.util.ImageUtils
+import com.dogu.livekit.data.local.entity.MessageEntity
 import com.dogu.livekit.data.repository.UserRepository
 import com.dogu.livekit.databinding.ActivityChatBinding
 import dagger.hilt.android.AndroidEntryPoint
@@ -145,7 +147,13 @@ class ChatActivity : AppCompatActivity() {
 
     private fun setupAdapter() {
         adapter = ChatAdapter(
-            onMessageLongClick = { message -> adapter.toggleSelection(message.id) },
+            onMessageLongClick = { message -> 
+                if (message.isMine) {
+                    showMyMessageOptionsMenu(message)
+                } else {
+                    adapter.toggleSelection(message.id)
+                }
+            },
             onSelectionChanged = { count ->
                 if (count > 0) {
                     binding.standardChatHeader.visibility = View.GONE
@@ -159,7 +167,77 @@ class ChatActivity : AppCompatActivity() {
         )
     }
 
-    private fun confirmDeleteSelectedMessages() {
+    private fun showMyMessageOptionsMenu(message: MessageEntity) {
+        val options = arrayOf("Bilgi", "Seç", "Sil")
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> {
+                        if (message.remoteId != null) {
+                            showMessageInfoDialog(message)
+                        } else {
+                            Toast.makeText(this, "Mesaj henüz sunucuya ulaşmadı", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    1 -> adapter.toggleSelection(message.id)
+                    2 -> confirmDeleteSingleMessage(message)
+                }
+            }
+            .show()
+    }
+
+    private fun confirmDeleteSingleMessage(message: MessageEntity) {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Mesajı Sil")
+            .setMessage("Bu mesajı silmek istediğinize emin misiniz?")
+            .setPositiveButton("Sil") { _, _ ->
+                viewModel.deleteMessage(message.id)
+            }
+            .setNegativeButton("İptal", null)
+            .show()
+    }
+
+    private fun showMessageInfoDialog(message: MessageEntity) {
+        val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(this, R.style.TransparentBottomSheetDialogTheme)
+        val view = layoutInflater.inflate(R.layout.dialog_message_info, null)
+        dialog.setContentView(view)
+
+        val recyclerView = view.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.statusRecyclerView)
+        val titleText = view.findViewById<TextView>(R.id.dialogTitle)
+        val contentText = view.findViewById<TextView>(R.id.messageContentPreview)
+
+        titleText.text = "Mesaj Bilgisi"
+        contentText.text = message.content
+
+        val infoAdapter = MessageInfoAdapter()
+        recyclerView.adapter = infoAdapter
+
+        viewModel.getMessageStatus(message.remoteId!!) { result ->
+            result.onSuccess { json ->
+                val statusList = mutableListOf<MessageStatusItem>()
+                val keys = json.keys()
+                while (keys.hasNext()) {
+                    val userId = keys.next()
+                    val userStatus = json.getJSONObject(userId)
+                    statusList.add(MessageStatusItem(
+                        userId = userId,
+                        deliveredTime = userStatus.optLong("delivered", 0),
+                        readTime = userStatus.optLong("read", 0)
+                    ))
+                }
+                runOnUiThread {
+                    infoAdapter.submitList(statusList)
+                }
+            }.onFailure {
+                runOnUiThread {
+                    Toast.makeText(this, "Bilgiler alınamadı", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        dialog.show()
+    }
+  private fun confirmDeleteSelectedMessages() {
         val selectedMessages = adapter.getSelectedMessages()
         if (selectedMessages.isEmpty()) return
 
@@ -268,6 +346,13 @@ class ChatActivity : AppCompatActivity() {
                         }
                     }
                     viewModel.markGroupAsRead(groupId!!)
+                    
+                    // Okunmamış mesajları sunucuya "okundu" olarak raporla
+                    messages.forEach { msg ->
+                        if (!msg.isMine && !msg.isRead && msg.remoteId != null) {
+                            viewModel.reportMessageRead(msg.remoteId)
+                        }
+                    }
                 }
             } else {
                 viewModel.getMessages(recipient!!).collect { messages ->
@@ -281,6 +366,12 @@ class ChatActivity : AppCompatActivity() {
                     val unreadIncoming = messages.any { !it.isMine && !it.isRead }
                     if (unreadIncoming) {
                         viewModel.markAsRead(recipient!!)
+                        // 1-1 için de raporla
+                        messages.forEach { msg ->
+                            if (!msg.isMine && !msg.isRead && msg.remoteId != null) {
+                                viewModel.reportMessageRead(msg.remoteId)
+                            }
+                        }
                     }
                 }
             }

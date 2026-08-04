@@ -140,9 +140,9 @@ class MainActivity : AppCompatActivity() {
             })
 
             bindUI()
+            loadSession()
             observeViewModel()
             observeSyncStatus()
-            loadSession()
             checkAndRequestPermissions()
             handleIntent(intent)
             
@@ -163,6 +163,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun observeMessages() {
         lifecycleScope.launch {
+            // current_identity değiştiğinde listeyi yenilemek için bir yöntem gerekebilir
+            // Ama şimdilik en azından loadSession sonrası tekrar tetiklendiğinden emin olalım
             chatViewModel.getLastMessages().collect { messages ->
                 messageListAdapter.submitList(messages)
             }

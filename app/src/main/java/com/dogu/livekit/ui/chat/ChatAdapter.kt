@@ -121,6 +121,7 @@ class ChatAdapter(
             oldItem.id == newItem.id && 
             oldItem.content == newItem.content && 
             oldItem.isRead == newItem.isRead && 
-            oldItem.timestamp == newItem.timestamp
+            oldItem.timestamp == newItem.timestamp &&
+            oldItem.remoteId == newItem.remoteId
     }
 }

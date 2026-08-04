@@ -99,4 +99,16 @@ class ChatViewModel @Inject constructor(
             userRepository.updateMutedStatus(identity, !currentStatus)
         }
     }
+
+    fun reportMessageRead(remoteId: String) {
+        viewModelScope.launch {
+            messageRepository.reportMessageStatus(remoteId, "read")
+        }
+    }
+
+    fun getMessageStatus(remoteId: String, onResult: (Result<org.json.JSONObject>) -> Unit) {
+        viewModelScope.launch {
+            onResult(messageRepository.fetchMessageStatus(remoteId))
+        }
+    }
 }

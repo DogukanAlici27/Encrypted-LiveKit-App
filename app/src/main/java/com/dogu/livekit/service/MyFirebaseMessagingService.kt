@@ -101,12 +101,14 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     private fun handleChatMessage(remoteMessage: RemoteMessage) {
         val sender = remoteMessage.data["sender"] ?: return
+        val recipient = remoteMessage.data["recipient"]
         val content = remoteMessage.data["content"] ?: ""
+        val serverMsgId = remoteMessage.data["serverMsgId"]
         val timestampStr = remoteMessage.data["timestamp"]
         val timestamp = timestampStr?.toLongOrNull() ?: System.currentTimeMillis()
 
         serviceScope.launch {
-            messageRepository.receiveMessage(sender, content, timestamp)
+            messageRepository.receiveMessage(sender, content, timestamp, recipient = recipient, remoteId = serverMsgId)
             val user = userRepository.fetchLocalUser(sender)
             if (user?.isMuted == true) {
                 Log.d("FCM", "Mesaj sessize alınan kullanıcıdan ($sender) geldi. Bildirim gösterilmiyor.")
@@ -123,6 +125,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val groupId = remoteMessage.data["groupId"] ?: return
         val groupName = remoteMessage.data["groupName"] ?: "Grup"
         val content = remoteMessage.data["content"] ?: ""
+        val serverMsgId = remoteMessage.data["serverMsgId"]
         val timestampStr = remoteMessage.data["timestamp"]
         val timestamp = timestampStr?.toLongOrNull() ?: System.currentTimeMillis()
 
@@ -139,7 +142,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 groupRepository.saveGroup(newGroup)
             }
 
-            messageRepository.receiveMessage(sender, content, timestamp, groupId)
+            messageRepository.receiveMessage(sender, content, timestamp, groupId, remoteId = serverMsgId)
             
             withContext(Dispatchers.Main) {
                 showGroupChatNotification(groupId, groupName, sender, content)

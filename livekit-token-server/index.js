@@ -24,6 +24,7 @@ const PORT = 3005;
 const users = {};
 const activeRooms = {};
 const groups = {}; // Yeni: Grupları saklamak için
+const messageStatus = {}; // Yeni: Mesajların iletildi/okundu durumlarını tutmak için
 
 const ONLINE_THRESHOLD_MS = 40000;
  
@@ -385,6 +386,14 @@ app.post('/send-group-message', (req, res) => {
     return res.status(404).send("Grup bulunamadı.");
   }
 
+  const serverMsgId = `MSG_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
+  messageStatus[serverMsgId] = {};
+  group.members.forEach(m => {
+    if (m !== sender) {
+      messageStatus[serverMsgId][m] = { delivered: null, read: null };
+    }
+  });
+
   if (firebaseReady) {
     const promises = group.members
       .filter(m => m !== sender) // Gönderen hariç herkese gönder
@@ -398,6 +407,7 @@ app.post('/send-group-message', (req, res) => {
               groupName: group.name,
               sender: sender,
               content: content,
+              serverMsgId: serverMsgId,
               timestamp: Date.now().toString()
             },
             token: member.fcmToken,
@@ -408,8 +418,8 @@ app.post('/send-group-message', (req, res) => {
       });
 
     Promise.all(promises).then(() => {
-      console.log(`Grup Mesajı: ${sender} -> ${group.name} (${groupId})`);
-      res.json({ success: true });
+      console.log(`Grup Mesajı: ${sender} -> ${group.name} (${groupId}) - ID: ${serverMsgId}`);
+      res.json({ success: true, serverMsgId: serverMsgId });
     });
   } else {
     res.status(503).send("Firebase hazır değil.");
@@ -432,12 +442,18 @@ app.post('/send-message', (req, res) => {
     return res.status(404).send("Alıcının bildirim token'ı yok.");
   }
 
+  const serverMsgId = `MSG_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
+  messageStatus[serverMsgId] = {};
+  messageStatus[serverMsgId][recipient] = { delivered: null, read: null };
+
   if (firebaseReady) {
     admin.messaging().send({
       data: {
         type: "CHAT_MESSAGE",
         sender: sender,
+        recipient: recipient,
         content: content,
+        serverMsgId: serverMsgId,
         timestamp: Date.now().toString()
       },
       token: recipientToken,
@@ -445,8 +461,8 @@ app.post('/send-message', (req, res) => {
         priority: 'high'
       }
     }).then(() => {
-      console.log(`Mesaj gönderildi: ${sender} -> ${recipient}`);
-      res.json({ success: true });
+      console.log(`Mesaj gönderildi: ${sender} -> ${recipient} - ID: ${serverMsgId}`);
+      res.json({ success: true, serverMsgId: serverMsgId });
     }).catch(e => {
       console.error(`Mesaj iletim hatası:`, e);
       res.status(500).send("Mesaj iletilemedi.");
@@ -492,6 +508,36 @@ app.post('/mark-read', (req, res) => {
   } else {
     res.status(503).send("Firebase hazır değil.");
   }
+});
+
+// YENİ: Mesaj durum raporlama (iletildi/okundu)
+app.post('/report-status', (req, res) => {
+  const { serverMsgId, identity, status } = req.body;
+  if (!serverMsgId || !identity || !status) return res.status(400).send("Eksik veri");
+
+  if (!messageStatus[serverMsgId]) {
+    messageStatus[serverMsgId] = {};
+  }
+  if (!messageStatus[serverMsgId][identity]) {
+    messageStatus[serverMsgId][identity] = { delivered: null, read: null };
+  }
+
+  if (status === 'delivered' && !messageStatus[serverMsgId][identity].delivered) {
+    messageStatus[serverMsgId][identity].delivered = Date.now();
+  } else if (status === 'read' && !messageStatus[serverMsgId][identity].read) {
+    messageStatus[serverMsgId][identity].read = Date.now();
+  }
+
+  res.json({ success: true });
+});
+
+// YENİ: Mesaj durumunu sorgulama
+app.get('/message-status', (req, res) => {
+  const { serverMsgId } = req.query;
+  if (!serverMsgId) return res.status(400).send("Eksik ID");
+
+  const status = messageStatus[serverMsgId] || {};
+  res.json(status);
 });
 
 app.listen(PORT, '0.0.0.0', () => {

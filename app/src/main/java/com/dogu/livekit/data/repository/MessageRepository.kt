@@ -39,7 +39,7 @@ class MessageRepository @Inject constructor(
             timestamp = System.currentTimeMillis(),
             isMine = true
         )
-        db.messageDao().insertMessage(message)
+        val localId = db.messageDao().insertMessage(message)
 
         // 2. Sunucuya gönder
         try {
@@ -50,7 +50,14 @@ class MessageRepository @Inject constructor(
             }
             val request = NetworkClient.createPostRequest("/send-message", json)
             httpClient.newCall(request).execute().use { response ->
-                if (response.isSuccessful) Result.success(true)
+                if (response.isSuccessful) {
+                    val body = response.body?.string() ?: "{}"
+                    val remoteId = JSONObject(body).optString("serverMsgId")
+                    if (remoteId.isNotEmpty()) {
+                        db.messageDao().updateRemoteId(localId, remoteId)
+                    }
+                    Result.success(true)
+                }
                 else Result.failure(IOException("Server error: ${response.code}"))
             }
         } catch (e: Exception) {
@@ -64,13 +71,13 @@ class MessageRepository @Inject constructor(
         // 1. Yerel DB'ye kaydet
         val message = MessageEntity(
             sender = me,
-            recipient = "", // Grup mesajında recipient boş olabilir veya groupId olabilir
+            recipient = "", 
             groupId = groupId,
             content = text,
             timestamp = System.currentTimeMillis(),
             isMine = true
         )
-        db.messageDao().insertMessage(message)
+        val localId = db.messageDao().insertMessage(message)
         db.groupDao().updateLastMessage(groupId, text, System.currentTimeMillis())
 
         // 2. Sunucuya gönder
@@ -82,7 +89,14 @@ class MessageRepository @Inject constructor(
             }
             val request = NetworkClient.createPostRequest("/send-group-message", json)
             httpClient.newCall(request).execute().use { response ->
-                if (response.isSuccessful) Result.success(true)
+                if (response.isSuccessful) {
+                    val body = response.body?.string() ?: "{}"
+                    val remoteId = JSONObject(body).optString("serverMsgId")
+                    if (remoteId.isNotEmpty()) {
+                        db.messageDao().updateRemoteId(localId, remoteId)
+                    }
+                    Result.success(true)
+                }
                 else Result.failure(IOException("Server error: ${response.code}"))
             }
         } catch (e: Exception) {
@@ -90,11 +104,18 @@ class MessageRepository @Inject constructor(
         }
     }
 
-    suspend fun receiveMessage(sender: String, content: String, timestamp: Long, groupId: String? = null) = withContext(Dispatchers.IO) {
-        val me = sessionPreferences.getCurrentIdentity() ?: return@withContext
+    suspend fun receiveMessage(sender: String, content: String, timestamp: Long, groupId: String? = null, recipient: String? = null, remoteId: String? = null) = withContext(Dispatchers.IO) {
+        val me = recipient ?: sessionPreferences.getCurrentIdentity()
+        
+        if (me == null && groupId == null) {
+            com.dogu.livekit.core.logging.Logger.e("❌ Mesaj kaydedilemedi: recipient (me) bilinmiyor")
+            return@withContext
+        }
+
         val message = MessageEntity(
+            remoteId = remoteId,
             sender = sender,
-            recipient = if (groupId != null) "" else me,
+            recipient = if (groupId != null) "" else (me ?: ""),
             groupId = groupId,
             content = content,
             timestamp = timestamp,
@@ -103,6 +124,39 @@ class MessageRepository @Inject constructor(
         db.messageDao().insertMessage(message)
         if (groupId != null) {
             db.groupDao().updateLastMessage(groupId, content, timestamp)
+        }
+        
+        // İletildi raporu gönder
+        if (remoteId != null) {
+            reportMessageStatus(remoteId, "delivered")
+        }
+    }
+
+    suspend fun reportMessageStatus(serverMsgId: String, status: String) = withContext(Dispatchers.IO) {
+        val me = sessionPreferences.getCurrentIdentity() ?: return@withContext
+        try {
+            val json = JSONObject().apply {
+                put("serverMsgId", serverMsgId)
+                put("identity", me)
+                put("status", status)
+            }
+            val request = NetworkClient.createPostRequest("/report-status", json)
+            httpClient.newCall(request).execute().close()
+        } catch (e: Exception) {
+            // Sessizce geç
+        }
+    }
+
+    suspend fun fetchMessageStatus(serverMsgId: String): Result<JSONObject> = withContext(Dispatchers.IO) {
+        try {
+            val url = "${NetworkClient.TOKEN_SERVER_URL}/message-status?serverMsgId=$serverMsgId"
+            val request = NetworkClient.createGetRequest(url)
+            httpClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) Result.success(JSONObject(response.body?.string() ?: "{}"))
+                else Result.failure(IOException("Error: ${response.code}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
