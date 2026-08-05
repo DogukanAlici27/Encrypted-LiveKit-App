@@ -27,10 +27,12 @@ class AddParticipantAdapter(
         val statusTv: TextView = view.findViewById(R.id.contactStatus)
         val selectCb: CheckBox = view.findViewById(R.id.contactSelectCb)
         val inviteBtn: MaterialButton = view.findViewById(R.id.contactCallBtn)
+        val chatBtn: View = view.findViewById(R.id.contactChatBtn)
 
         fun bind(user: UserEntity) {
             nameTv.text = user.identity
             selectCb.visibility = View.GONE
+            chatBtn.visibility = View.GONE
             val context = itemView.context
 
             val photoBase64 = user.profilePhoto

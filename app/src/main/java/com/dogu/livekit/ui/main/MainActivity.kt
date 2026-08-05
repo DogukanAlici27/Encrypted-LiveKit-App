@@ -199,6 +199,7 @@ class MainActivity : AppCompatActivity() {
                     is AuthViewModel.AuthState.Loading -> showStatus(getString(R.string.loading), 10000)
                     is AuthViewModel.AuthState.Success -> {
                         binding.currentUserTextView.text = state.identity
+                        messageListAdapter.myIdentity = state.identity
                         binding.homePanel.visibility = View.GONE
                         val successMsg = if (state.isOnline) "Giriş Başarılı!" else "Çevrimdışı giriş başarılı"
                         showStatus(successMsg)
@@ -985,12 +986,15 @@ class MainActivity : AppCompatActivity() {
         val initialFiltered = allContacts.filter { it.identity.lowercase() != myIdentity && !it.isBlocked }
         adapter.submitList(initialFiltered)
 
-        lifecycleScope.launch {
+        // Bu collector diyaloğa özel; iptal edilmezse her diyalog açılışında yeni bir
+        // sonsuz collector birikir (bellek sızıntısı + kapalı diyaloğun adapter'ına yazma)
+        val contactsJob = lifecycleScope.launch {
             contactsViewModel.contacts.collect { contacts ->
                 val filtered = contacts.filter { it.identity.lowercase() != myIdentity && !it.isBlocked }
                 adapter.submitList(filtered)
             }
         }
+        dialog.setOnDismissListener { contactsJob.cancel() }
 
         searchEt.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}

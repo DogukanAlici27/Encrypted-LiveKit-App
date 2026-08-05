@@ -149,7 +149,7 @@ class MessageRepository @Inject constructor(
 
     suspend fun fetchMessageStatus(serverMsgId: String): Result<JSONObject> = withContext(Dispatchers.IO) {
         try {
-            val url = "${NetworkClient.TOKEN_SERVER_URL}/message-status?serverMsgId=$serverMsgId"
+            val url = "${NetworkClient.TOKEN_SERVER_URL}/message-status?serverMsgId=${java.net.URLEncoder.encode(serverMsgId, "UTF-8")}"
             val request = NetworkClient.createGetRequest(url)
             httpClient.newCall(request).execute().use { response ->
                 if (response.isSuccessful) Result.success(JSONObject(response.body?.string() ?: "{}"))

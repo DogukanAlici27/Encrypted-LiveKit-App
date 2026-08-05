@@ -82,7 +82,7 @@ class GroupRepository @Inject constructor(
 
     suspend fun syncGroupDetailsFromServer(groupId: String): Result<GroupEntity> = withContext(Dispatchers.IO) {
         try {
-            val url = "${NetworkClient.TOKEN_SERVER_URL}/group-details?groupId=$groupId"
+            val url = "${NetworkClient.TOKEN_SERVER_URL}/group-details?groupId=${java.net.URLEncoder.encode(groupId, "UTF-8")}"
             val request = NetworkClient.createGetRequest(url)
             httpClient.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {

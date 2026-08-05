@@ -172,9 +172,24 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         }
     }
 
+    // Kanal her iki bildirim türünden önce de garanti edilmeli; grup mesajı, birebir mesajdan
+    // önce gelirse kanal hiç oluşmamış olur ve Android 8+ bildirimi sessizce düşürür.
+    private fun ensureChatChannel(notificationManager: NotificationManager): String {
+        val channelId = "chat_messages_channel_v2"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(channelId, "Mesajlar", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Yeni mesaj bildirimleri"
+                enableVibration(true)
+                setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI, null)
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+        return channelId
+    }
+
     private fun showGroupChatNotification(groupId: String, groupName: String, sender: String, content: String) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channelId = "chat_messages_channel_v2"
+        val channelId = ensureChatChannel(notificationManager)
 
         val intent = Intent(this, com.dogu.livekit.ui.chat.ChatActivity::class.java).apply {
             putExtra("groupId", groupId)
@@ -210,16 +225,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     private fun showChatNotification(sender: String, content: String) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channelId = "chat_messages_channel_v2"
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "Mesajlar", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Yeni mesaj bildirimleri"
-                enableVibration(true)
-                setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI, null)
-            }
-            notificationManager.createNotificationChannel(channel)
-        }
+        val channelId = ensureChatChannel(notificationManager)
 
         val intent = Intent(this, com.dogu.livekit.ui.chat.ChatActivity::class.java).apply {
             putExtra("recipient", sender)
@@ -281,7 +287,9 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     private suspend fun silentDeclineCall(caller: String, room: String) {
         val identity = sessionPreferences.getCurrentIdentity() ?: return
-        val result = userRepository.fetchToken(identity, "REJECTER", room)
+        // target null: "room" parametresi yeterli; sahte bir hedef adı gönderirsek sunucu onu
+        // gerçek bir arama hedefi sanır (o isimde kullanıcı varsa FCM bile gönderir).
+        val result = userRepository.fetchToken(identity, null, room)
         if (result.isSuccess) {
             val json = result.getOrNull()!!
             try {

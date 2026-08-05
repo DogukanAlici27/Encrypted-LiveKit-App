@@ -18,11 +18,20 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class MessageListAdapter(
-    private val myIdentity: String,
+    myIdentity: String,
     private val onChatClick: (String) -> Unit,
     private val onGroupChatClick: (String, String) -> Unit,
     private val onLongClick: (String, Boolean) -> Unit
 ) : ListAdapter<MessageEntity, MessageListAdapter.ViewHolder>(DiffCallback()) {
+
+    // Uygulama açıkken giriş yapıldığında kimlik sonradan belli olur; güncellenebilir olmalı
+    var myIdentity: String = myIdentity
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyDataSetChanged()
+            }
+        }
 
     private var users: List<UserEntity> = emptyList()
     private var groups: List<GroupEntity> = emptyList()

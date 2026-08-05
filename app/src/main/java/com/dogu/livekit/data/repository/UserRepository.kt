@@ -12,6 +12,7 @@ import com.dogu.livekit.worker.DataSyncWorker
 import com.dogu.livekit.data.local.AppDatabase
 import com.dogu.livekit.data.local.entity.CallLogEntity
 import com.dogu.livekit.data.local.entity.UserEntity
+import com.dogu.livekit.data.remote.HttpException
 import com.dogu.livekit.data.remote.NetworkClient
 import com.dogu.livekit.data.local.prefs.SessionPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -44,21 +45,30 @@ class UserRepository @Inject constructor(
             val identity = user.getString("identity").trim()
             val existing = db.userDao().getUser(identity)
 
+            // org.json, JSON null değerini "null" METNİ olarak döndürür; hepsini normalize et
             val rawRoom = user.optString("currentRoom", "")
             val currentRoom = if (rawRoom == "null" || rawRoom.isEmpty()) null else rawRoom
+            val rawPhoto = user.optString("profilePhoto", "")
+            val profilePhoto = if (rawPhoto == "null") "" else rawPhoto
+            val rawKey = user.optString("publicKey", "")
+            // Sunucu publicKey bilmiyorsa yereldekini koru; "null" metni Base64 decode edilirse
+            // E2EE anahtar şifreleme sessizce bozulur
+            val publicKey = if (rawKey == "null" || rawKey.isEmpty()) existing?.publicKey else rawKey
 
             entities.add(UserEntity(
                 identity = identity,
                 password = existing?.password,
                 isOnline = user.optBoolean("isOnline", false),
-                profilePhoto = user.optString("profilePhoto", ""),
+                profilePhoto = profilePhoto,
                 currentRoom = currentRoom,
-                publicKey = user.optString("publicKey", ""),
-                needsSync = false,
+                publicKey = publicKey,
+                needsSync = existing?.needsSync ?: false,
                 // /users endpoint'i isBlocked dönüyor; onu koru, yoksa mevcutu koru
-                // Yerel engelleme durumunu her zaman koru. Sunucu listesinde 'isBlocked' alanı 
+                // Yerel engelleme durumunu her zaman koru. Sunucu listesinde 'isBlocked' alanı
                 // genellikle gelmez veya false gelir; yereldeki kararı ezmemeli.
-                isBlocked = (existing?.isBlocked ?: false) || user.optBoolean("isBlocked", false)
+                isBlocked = (existing?.isBlocked ?: false) || user.optBoolean("isBlocked", false),
+                // REPLACE insert'i sessize-alma durumunu varsayılana (false) döndürmesin
+                isMuted = existing?.isMuted ?: false
             ))
         }
         if (entities.isNotEmpty()) db.userDao().insertUsers(entities)
@@ -76,7 +86,7 @@ class UserRepository @Inject constructor(
             val isMe = user.identity.trim() == currentIdentity?.trim()
             val result = auth("register", user.identity, user.password ?: "", fcmToken, user.publicKey, isOnline = isMe)
 
-            if (result.isSuccess || result.exceptionOrNull()?.message?.contains("409") == true) {
+            if (result.isSuccess || (result.exceptionOrNull() as? HttpException)?.code == 409) {
                 db.userDao().markAsSynced(user.identity)
                 Logger.d("✅ ${user.identity} başarıyla senkronize edildi")
             } else {
@@ -173,7 +183,7 @@ class UserRepository @Inject constructor(
         val user = db.userDao().getUser(identity)
         if (user != null && user.password != null) {
             val result = auth("register", user.identity, user.password, fcmToken, user.publicKey, isOnline = true)
-            if (result.isSuccess || result.exceptionOrNull()?.message?.contains("409") == true) {
+            if (result.isSuccess || (result.exceptionOrNull() as? HttpException)?.code == 409) {
                 db.userDao().markAsSynced(user.identity)
             }
         }
@@ -192,7 +202,7 @@ class UserRepository @Inject constructor(
             val request = NetworkClient.createPostRequest(endpoint, json)
             httpClient.newCall(request).execute().use { response ->
                 if (response.isSuccessful) Result.success(JSONObject())
-                else Result.failure(IOException(response.body?.string() ?: "Error"))
+                else Result.failure(HttpException(response.code, response.body?.string()))
             }
         } catch (e: Exception) { Result.failure(e) }
     }
@@ -218,7 +228,11 @@ class UserRepository @Inject constructor(
 
     suspend fun fetchUsers(): Result<JSONArray> = withContext(Dispatchers.IO) {
         try {
-            val url = "${NetworkClient.TOKEN_SERVER_URL}/users"
+            // identity parametresi gönderilmezse sunucu tarafındaki gizlilik mantığı
+            // (engelleyenin çevrimiçi durumunu gizleme) ve isBlocked alanı hiç çalışmaz
+            val me = sessionPreferences.getCurrentIdentity()
+            var url = "${NetworkClient.TOKEN_SERVER_URL}/users"
+            if (me != null) url += "?identity=${java.net.URLEncoder.encode(me, "UTF-8")}"
             val request = NetworkClient.createGetRequest(url)
             httpClient.newCall(request).execute().use { response ->
                 if (response.isSuccessful) Result.success(JSONArray(response.body?.string() ?: "[]"))
@@ -229,9 +243,10 @@ class UserRepository @Inject constructor(
 
     suspend fun fetchToken(identity: String, target: String?, manualRoom: String?, encryptedKeysJson: String? = null, isVideo: Boolean = true): Result<JSONObject> = withContext(Dispatchers.IO) {
         try {
-            var url = "${NetworkClient.TOKEN_SERVER_URL}/token?identity=$identity"
-            if (target != null) url += "&target=$target"
-            if (manualRoom != null) url += "&room=$manualRoom"
+            // Kullanıcı adlarında boşluk/özel karakter olabilir; tüm parametreler encode edilmeli
+            var url = "${NetworkClient.TOKEN_SERVER_URL}/token?identity=${java.net.URLEncoder.encode(identity, "UTF-8")}"
+            if (target != null) url += "&target=${java.net.URLEncoder.encode(target, "UTF-8")}"
+            if (manualRoom != null) url += "&room=${java.net.URLEncoder.encode(manualRoom, "UTF-8")}"
             if (encryptedKeysJson != null) url += "&keys=${java.net.URLEncoder.encode(encryptedKeysJson, "UTF-8")}"
             url += "&video=$isVideo"
             val request = NetworkClient.createGetRequest(url)
@@ -332,7 +347,7 @@ class UserRepository @Inject constructor(
     suspend fun syncBlockedUsersFromServer(myIdentity: String): Result<Unit> {
         return withContext(Dispatchers.IO) {
             try {
-                val url = "${NetworkClient.TOKEN_SERVER_URL}/my-blocks?identity=$myIdentity"
+                val url = "${NetworkClient.TOKEN_SERVER_URL}/my-blocks?identity=${java.net.URLEncoder.encode(myIdentity, "UTF-8")}"
                 val request = NetworkClient.createGetRequest(url)
                 val response = httpClient.newCall(request).execute()
 

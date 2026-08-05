@@ -65,3 +65,10 @@ object NetworkClient {
         return Request.Builder().url(url).build()
     }
 }
+
+/**
+ * Sunucudan yanıt alınan ama başarısız olan (4xx/5xx) istekler için.
+ * Gerçek ağ hatalarından (timeout, bağlantı yok) ayırt etmeyi sağlar;
+ * ör. 403 "başka cihazda aktif" cevabı çevrimdışı-giriş akışına düşmemeli.
+ */
+class HttpException(val code: Int, body: String?) : java.io.IOException(body?.takeIf { it.isNotBlank() } ?: "HTTP $code")

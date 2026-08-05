@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -33,7 +34,21 @@ class CallService : Service() {
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(2001, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
+            // API 34+: verilmemiş bir izne ait FGS tipiyle başlatmak SecurityException fırlatır
+            // (ör. sesli aramada kamera izni hiç verilmemişse). Tipleri izinlere göre kur.
+            var serviceTypes = 0
+            if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                serviceTypes = serviceTypes or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            }
+            if (checkSelfPermission(android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                serviceTypes = serviceTypes or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+            }
+            if (serviceTypes == 0) {
+                // Mikrofon izni bile yoksa görüşme zaten yapılamaz; tipli FGS başlatma
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            startForeground(2001, notification, serviceTypes)
         } else {
             startForeground(2001, notification)
         }

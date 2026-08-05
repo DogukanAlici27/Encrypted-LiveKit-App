@@ -22,22 +22,29 @@ fun ImageView.setDefaultAvatar(context: Context) {
 }
 
 fun TextView.showStatus(message: String, duration: Long = 3000L, scope: CoroutineScope) {
-    this.text = message
-    this.visibility = View.VISIBLE
-    this.animate()
+    // translationYBy kullanmak art arda çağrılarda kaymayı biriktiriyordu; mutlak değer kullan
+    animate().cancel()
+    text = message
+    alpha = 0f
+    translationY = 20f
+    visibility = View.VISIBLE
+    animate()
         .alpha(1f)
-        .translationYBy(-20f)
+        .translationY(0f)
         .setDuration(300)
         .withEndAction {
             scope.launch {
                 delay(duration.milliseconds)
-                this@showStatus.animate()
-                    .alpha(0f)
-                    .translationYBy(20f)
-                    .setDuration(300)
-                    .withEndAction {
-                        this@showStatus.visibility = View.GONE
-                    }
+                // Bekleme sırasında yeni bir mesaj gösterildiyse onu gizleme
+                if (this@showStatus.text.toString() == message) {
+                    this@showStatus.animate()
+                        .alpha(0f)
+                        .translationY(20f)
+                        .setDuration(300)
+                        .withEndAction {
+                            this@showStatus.visibility = View.GONE
+                        }
+                }
             }
         }
 }

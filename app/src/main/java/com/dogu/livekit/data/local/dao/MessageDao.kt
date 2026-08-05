@@ -49,7 +49,13 @@ interface MessageDao {
     """)
     fun getLastMessages(me: String): Flow<List<MessageEntity>>
 
-    @Query("DELETE FROM messages WHERE (sender = :me AND recipient = :user) OR (sender = :user AND recipient = :me)")
+    @Query("""
+        DELETE FROM messages
+        WHERE groupId IS NULL AND (
+            (LOWER(sender) = LOWER(:me) AND LOWER(recipient) = LOWER(:user))
+            OR (LOWER(sender) = LOWER(:user) AND LOWER(recipient) = LOWER(:me))
+        )
+    """)
     suspend fun deleteConversation(me: String, user: String)
 
     @Query("DELETE FROM messages WHERE id = :messageId")

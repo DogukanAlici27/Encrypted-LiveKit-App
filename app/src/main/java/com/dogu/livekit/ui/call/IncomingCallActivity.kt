@@ -215,8 +215,10 @@ class IncomingCallActivity : AppCompatActivity() {
 
             val identity = sessionPreferences.getCurrentIdentity() ?: "Alıcı"
 
-            // Reddetme sinyalini göndermek için odaya bağlanıyoruz
-            val result = userRepository.fetchToken(identity, "REJECTER", room)
+            // Reddetme sinyalini göndermek için odaya bağlanıyoruz.
+            // target null: "room" parametresi yeterli; sahte bir hedef adı sunucuda gerçek
+            // arama hedefi gibi işlenir (o isimde kullanıcı varsa FCM bile gider).
+            val result = userRepository.fetchToken(identity, null, room)
             if (result.isSuccess) {
                 val json = result.getOrNull()!!
                 try {

@@ -37,9 +37,14 @@ class AuthViewModel @Inject constructor(
                 _authState.value = AuthState.Success(identity, isOnline = true)
             } else {
                 val exception = result.exceptionOrNull()
-                val isNetworkError = exception is java.io.IOException
-                val isUserNotFoundError = exception?.message?.contains("404") == true || exception?.message?.contains("401") == true
+                val httpCode = (exception as? com.dogu.livekit.data.remote.HttpException)?.code
+                // Gerçek ağ hatası: sunucudan hiç yanıt alınamadı (timeout, bağlantı yok)
+                val isNetworkError = exception is java.io.IOException && httpCode == null
+                // Sunucu ayakta ama kullanıcıyı tanımıyor (ör. in-memory sunucu yeniden başladı)
+                val isUserNotFoundError = httpCode == 401 || httpCode == 404
 
+                // DİKKAT: 403 (başka cihazda aktif) ve 409 (isim alınmış) buraya GİRMEMELİ;
+                // aksi halde çevrimdışı akış sunucunun reddini baypas eder.
                 if (isNetworkError || isUserNotFoundError) {
                     if (mode == "register") {
                         // For simplicity, checking if user exists locally

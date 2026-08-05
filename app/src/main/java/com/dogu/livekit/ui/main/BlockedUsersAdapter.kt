@@ -22,6 +22,7 @@ class BlockedUsersAdapter(
         val statusDot: View = view.findViewById(R.id.statusDot)
         val statusTv: TextView = view.findViewById(R.id.contactStatus)
         val selectCb: CheckBox = view.findViewById(R.id.contactSelectCb)
+        val chatBtn: View = view.findViewById(R.id.contactChatBtn)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): BlockedViewHolder {
@@ -36,6 +37,7 @@ class BlockedUsersAdapter(
         holder.statusDot.visibility = View.GONE
         holder.statusTv.visibility = View.GONE
         holder.selectCb.visibility = View.GONE
+        holder.chatBtn.visibility = View.GONE
 
         holder.actionBtn.text = "KALDIR"
         holder.actionBtn.backgroundTintList = ContextCompat.getColorStateList(context, R.color.success_green)

@@ -42,7 +42,15 @@ const isBlockedBy = (blocker, target) => {
  
 app.post('/register', (req, res) => {
   const { identity, password, fcmToken, profilePhoto, publicKey, isOnline, blockedUsers } = req.body;
- 
+
+  // Boş/eksik identity "undefined" adlı hayalet kullanıcı yaratıyordu
+  if (!identity || typeof identity !== 'string' || !identity.trim()) {
+    return res.status(400).send("identity gerekli.");
+  }
+  if (!password || typeof password !== 'string') {
+    return res.status(400).send("password gerekli.");
+  }
+
   if (users[identity]) {
     console.log(`Kayıt Reddedildi: ${identity} zaten mevcut.`);
     return res.status(409).send("Bu kullanıcı adı zaten alınmış.");
@@ -65,6 +73,10 @@ app.post('/register', (req, res) => {
  
 app.post('/login', (req, res) => {
   const { identity, password, fcmToken, publicKey } = req.body;
+
+  if (!identity || typeof identity !== 'string' || !identity.trim()) {
+    return res.status(400).send("identity gerekli.");
+  }
 
   if (isUserOnline(identity)) {
     console.log(`Giriş Reddedildi: ${identity} zaten başka bir cihazda aktif.`);
